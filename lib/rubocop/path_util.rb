@@ -22,6 +22,19 @@ module RuboCop
       @pwd = nil
     end
 
+    # Returns `path` without its `base_dir` prefix when it is inside that
+    # directory, and `path` itself otherwise. Unlike `relative_path`, a path
+    # outside `base_dir` is kept as it is instead of being reached through
+    # `..`, so that two unrelated directories stay distinguishable. Without a
+    # `base_dir` there is nothing to make the path relative to, so it is
+    # returned unchanged.
+    def portable_path(path, base_dir)
+      return path unless path.is_a?(String) && base_dir
+
+      prefix = "#{base_dir}#{File::SEPARATOR}"
+      path.start_with?(prefix) ? path.delete_prefix(prefix) : path
+    end
+
     def relative_path(path, base_dir = PathUtil.pwd)
       PathUtil.relative_paths_cache[base_dir][path] ||=
         # Optimization for the common case where path begins with the base

@@ -608,6 +608,37 @@ RSpec.describe RuboCop::Config do
     end
   end
 
+  describe '#signature' do
+    # `Exclude` and `Include` are expanded to absolute paths when the
+    # configuration is loaded, so the directory they are expanded against must
+    # not end up in the signature: the same configuration file checked out in
+    # another directory (as a git worktree is) must have the same signature.
+    def config_at(dir)
+      hash = { 'AllCops' => { 'Exclude' => ["#{dir}/vendor/**/*"] } }
+      described_class.new(hash, "#{dir}/.rubocop.yml")
+    end
+
+    it 'is the same for the same configuration in another directory' do
+      allow(RuboCop::ConfigFinder).to receive(:project_root).and_return('/first/checkout')
+      first_signature = config_at('/first/checkout').signature
+
+      allow(RuboCop::ConfigFinder).to receive(:project_root).and_return('/second/checkout')
+
+      expect(config_at('/second/checkout').signature).to eq(first_signature)
+    end
+
+    it 'differs when the configuration itself differs' do
+      allow(RuboCop::ConfigFinder).to receive(:project_root).and_return('/first/checkout')
+      first_signature = config_at('/first/checkout').signature
+
+      other = described_class.new(
+        { 'AllCops' => { 'Exclude' => ['other/**/*'] } }, '/second/checkout/.rubocop.yml'
+      )
+
+      expect(other.signature).not_to eq(first_signature)
+    end
+  end
+
   describe '#file_to_exclude?' do
     include_context 'mock console output'
 

@@ -22,6 +22,30 @@ RSpec.describe RuboCop::PathUtil do
     end
   end
 
+  describe '#portable_path' do
+    it 'removes the base directory from a path inside it' do
+      expect(described_class.portable_path('/foo/bar/baz.rb', '/foo')).to eq('bar/baz.rb')
+    end
+
+    it 'leaves a path outside the base directory unchanged' do
+      expect(described_class.portable_path('/other/baz.rb', '/foo')).to eq('/other/baz.rb')
+    end
+
+    it 'leaves the base directory itself unchanged' do
+      expect(described_class.portable_path('/foo', '/foo')).to eq('/foo')
+    end
+
+    it 'leaves the path unchanged without a base directory' do
+      expect(described_class.portable_path('/foo/bar.rb', nil)).to eq('/foo/bar.rb')
+    end
+
+    it 'leaves a non-string path unchanged' do
+      pattern = /foo/
+
+      expect(described_class.portable_path(pattern, '/foo')).to be(pattern)
+    end
+  end
+
   describe '#absolute?' do
     it 'returns a truthy value for a path beginning with slash' do
       expect(described_class).to be_absolute('/Users/foo')

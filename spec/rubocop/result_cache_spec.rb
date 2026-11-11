@@ -325,6 +325,107 @@ RSpec.describe RuboCop::ResultCache, :isolated_environment do
     end
   end
 
+  describe 'when the same project is checked out twice' do
+    # A git worktree is a second checkout of the same project in another
+    # directory, and a run there inspects the file by a path under that
+    # directory. Identical files should reuse the cache entry written by the
+    # first checkout.
+    let(:checkout) { File.expand_path(Dir.pwd) }
+    let(:other_checkout) { File.expand_path('../other_checkout', checkout) }
+    let(:other_file) { "#{other_checkout}/example.rb" }
+
+    # A run in the other checkout inspects the file by the absolute path under
+    # that directory, as `Runner` does for every file.
+    def cache_in_other_checkout
+      Dir.chdir(other_checkout) do
+        RuboCop::PathUtil.reset_pwd
+        described_class.new(other_file, team, options, config_store, cache_root)
+      end
+    ensure
+      RuboCop::PathUtil.reset_pwd
+    end
+
+    before do
+      FileUtils.mkdir_p(other_checkout)
+      create_file(other_file, File.read('example.rb'))
+      allow(config_store).to receive(:for_file).and_return(RuboCop::Config.new)
+      # Each checkout is the root of the same project, as a `Gemfile` at the top
+      # of each directory makes it for `ConfigFinder`.
+      allow(RuboCop::ConfigFinder).to receive(:project_root) do
+        RuboCop::PathUtil.pwd == other_checkout ? other_checkout : checkout
+      end
+    end
+
+    it 'reuses the cache entry of a file that is identical in the other checkout' do
+      cache.save(offenses)
+
+      expect(cache_in_other_checkout).to be_valid
+    end
+
+    # The file path is made relative to the project root, not the working
+    # directory, so that a file hashed from a subdirectory gets the same
+    # checksum as from the root.
+    it 'hashes a file by its path relative to the project root' do
+      create_file('subdir/example.rb', File.read('example.rb'))
+      subdir_file = File.expand_path('subdir/example.rb')
+      described_class.new(subdir_file, team, options, config_store, cache_root).save(offenses)
+
+      subdir_cache = Dir.chdir('subdir') do
+        RuboCop::PathUtil.reset_pwd
+        described_class.new(subdir_file, team, options, config_store, cache_root)
+      end
+
+      expect(subdir_cache).to be_valid
+    ensure
+      RuboCop::PathUtil.reset_pwd
+    end
+
+    it 'does not reuse the cache entry of a file that differs' do
+      cache.save(offenses)
+      create_file(other_file, ['x = 2'])
+
+      expect(cache_in_other_checkout).not_to be_valid
+    end
+
+    context 'when the configuration for the file differs' do
+      before do
+        other_config = RuboCop::Config.new('AllCops' => { 'TargetRubyVersion' => 3.4 })
+        allow(config_store).to receive(:for_file) do
+          RuboCop::PathUtil.pwd == other_checkout ? other_config : RuboCop::Config.new
+        end
+      end
+
+      it 'does not reuse the cache entry' do
+        cache.save(offenses)
+
+        expect(cache_in_other_checkout).not_to be_valid
+      end
+    end
+
+    context 'when --config names the same file in both checkouts' do
+      let(:options) { { config: File.expand_path('.rubocop.yml') } }
+
+      before do
+        create_file('.rubocop.yml', ['AllCops:', '  NewCops: disable'])
+        create_file("#{other_checkout}/.rubocop.yml", File.read('.rubocop.yml'))
+      end
+
+      it 'reuses the cache entry' do
+        cache.save(offenses)
+
+        other_options = { config: File.expand_path("#{other_checkout}/.rubocop.yml") }
+        other_cache = Dir.chdir(other_checkout) do
+          RuboCop::PathUtil.reset_pwd
+          described_class.new(other_file, team, other_options, config_store, cache_root)
+        end
+
+        expect(other_cache).to be_valid
+      ensure
+        RuboCop::PathUtil.reset_pwd
+      end
+    end
+  end
+
   describe 'when the file checksum cannot be computed' do
     it 'neither writes nor reads the cache entry shared with other such files' do
       missing_cache = described_class.new('nonexistent.rb', team, options, config_store, cache_root)

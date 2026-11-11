@@ -97,8 +97,14 @@ module RuboCop
       @to_s ||= @hash.to_s
     end
 
+    # The signature identifies the effective configuration, so that cached
+    # results are reused only when it has not changed. Path parameters such as
+    # `Exclude` are expanded to absolute paths when the configuration is loaded,
+    # so the directories they are relative to are left out of the signature.
+    # Two checkouts of the same project, such as git worktrees, then have the
+    # same signature.
     def signature
-      @signature ||= Digest::SHA1.hexdigest(to_s)
+      @signature ||= Digest::SHA1.hexdigest(portable_to_s)
     end
 
     # True if this is a config file that is shipped with RuboCop
@@ -390,6 +396,16 @@ module RuboCop
     end
 
     private
+
+    # `to_s` with the paths that were expanded against the project root made
+    # relative to it. Their depth is kept, so that a configuration at one depth
+    # is still distinguished from an identical one at another depth.
+    def portable_to_s
+      dir = ConfigFinder.project_root
+      return to_s unless dir
+
+      to_s.gsub("#{dir}#{File::SEPARATOR}", '')
+    end
 
     def match_relative_or_absolute_path?(pattern, relative_file_path, absolute_file_path)
       should_use_absolute_path = absolute?(pattern.to_s) || pattern.to_s.start_with?('..') ||

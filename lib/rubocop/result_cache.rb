@@ -13,6 +13,11 @@ module RuboCop
                       fix_layout autocorrect safe_autocorrect autocorrect_all
                       cache fail_fast stdin parallel].freeze
 
+    # Options whose value is a path. They are made relative to the project root,
+    # so that the same invocation from another checkout of the project (such as
+    # a git worktree) produces the same cache key.
+    PATH_OPTIONS = %i[config plugin require].freeze
+
     DL_EXTENSIONS = ::RbConfig::CONFIG
                     .values_at('DLEXT', 'DLEXT2')
                     .reject { |ext| !ext || ext.empty? }
@@ -189,7 +194,9 @@ module RuboCop
       return unavailable_checksum unless stat.file?
 
       digester = Digest::SHA1.new
-      digester.update("#{file}#{stat.mode}#{config_store.for_file(file).signature}")
+      # A path relative to the project root is the same in every checkout of the
+      # project, so the cache can be shared between git worktrees.
+      digester.update("#{portable_path(file)}#{stat.mode}#{config_store.for_file(file).signature}")
       digester.file(file)
       digester.hexdigest
     rescue Errno::ENOENT
@@ -203,6 +210,14 @@ module RuboCop
     def unavailable_checksum
       @checksum_unavailable = true
       '_'
+    end
+
+    # `path` relative to the project root, which is the same in every checkout of
+    # the project. Without a project root (no `Gemfile` above the working
+    # directory), the working directory is the best available approximation of
+    # the checkout's root.
+    def portable_path(path)
+      PathUtil.portable_path(path, ConfigFinder.project_root || PathUtil.pwd)
     end
 
     class << self
@@ -229,12 +244,27 @@ module RuboCop
       def relevant_options_digest(options)
         @relevant_options_digest ||= {}
         @relevant_options_digest[options] ||= begin
-          options = options.reject { |key, _| NON_CHANGING.include?(key) }
+          options = portable_options(options.reject { |key, _| NON_CHANGING.include?(key) })
           options.to_s.gsub(/[^a-z]+/i, '_')
         end
       end
 
       private
+
+      # Path-valued options are made relative to the project root, so that
+      # `--config .rubocop.yml` names the same file from any checkout of the
+      # project.
+      def portable_options(options)
+        options.to_h do |key, value|
+          [key, PATH_OPTIONS.include?(key) ? portable_option_path(value) : value]
+        end
+      end
+
+      def portable_option_path(value)
+        return value.map { |element| portable_option_path(element) } if value.is_a?(Array)
+
+        PathUtil.portable_path(value, ConfigFinder.project_root || PathUtil.pwd)
+      end
 
       def digest(path)
         content = if path.end_with?(*DL_EXTENSIONS)
