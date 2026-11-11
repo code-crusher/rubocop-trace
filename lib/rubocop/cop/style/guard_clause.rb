@@ -10,6 +10,11 @@ module RuboCop
       # one of `return`, `break`, `next`, `raise`, or `fail` is used
       # in the body of the conditional expression.
       #
+      # A condition is also allowed when both of its branches use one of
+      # those keywords, since the mutually exclusive control flow is
+      # already explicit and a guard clause would not make it more
+      # readable.
+      #
       # NOTE: Autocorrect works in most cases except with if-else statements
       #   that contain logical operators such as `foo || raise('exception')`
       #
@@ -135,24 +140,35 @@ module RuboCop
         alias on_itblock on_block
 
         def on_if(node)
-          return if accepted_form?(node)
+          return if accepted_form?(node) || both_branches_guard_clauses?(node)
+          return unless (branch = exiting_branch_of(node))
 
-          if (guard_clause = node.if_branch&.guard_clause?)
-            kw = node.loc.keyword.source
-            guard = :if
-          elsif (guard_clause = node.else_branch&.guard_clause?)
-            kw = node.inverse_keyword
-            guard = :else
-          else
-            return
-          end
-
+          kw, guard, guard_clause = branch
           guard = nil if and_or_guard_clause?(guard_clause)
 
           register_offense(node, guard_clause_source(guard_clause), kw, guard)
         end
 
         private
+
+        # Both branches of the conditional exit the current scope, e.g.
+        # `if x then next else break end`. The mutually exclusive control
+        # flow is already explicit, so converting it to guard clauses
+        # would not make the code more readable.
+        def both_branches_guard_clauses?(node)
+          node.else? && node.if_branch&.guard_clause? && node.else_branch&.guard_clause?
+        end
+
+        # Returns the keyword, branch indicator, and guard clause node of
+        # the first branch that exits the current scope, or nil if neither
+        # branch does.
+        def exiting_branch_of(node)
+          if (guard_clause = node.if_branch&.guard_clause?)
+            [node.loc.keyword.source, :if, guard_clause]
+          elsif (guard_clause = node.else_branch&.guard_clause?)
+            [node.inverse_keyword, :else, guard_clause]
+          end
+        end
 
         def check_ending_body(body)
           return if body.nil?

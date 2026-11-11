@@ -1176,6 +1176,18 @@ RSpec.describe RuboCop::Cop::Style::GuardClause, :config do
       RUBY
     end
 
+    it "does not register an offense if both branches exit the scope with #{kw}", *options do
+      expect_no_offenses(<<~RUBY)
+        10.times do |it|
+          if it < 5
+            #{kw}
+          else
+            #{kw}
+          end
+        end
+      RUBY
+    end
+
     it "does not report an offense if #{kw} is inside elsif", *options do
       expect_no_offenses(<<~RUBY)
         if something
@@ -1390,6 +1402,43 @@ RSpec.describe RuboCop::Cop::Style::GuardClause, :config do
     'on if nodes which exit current scope', 'break', [:ruby32, { unsupported_on: :prism }]
   )
   it_behaves_like('on if nodes which exit current scope', 'raise "error"')
+
+  it 'does not register an offense when both branches exit the current scope' do
+    expect_no_offenses(<<~RUBY)
+      10.times do |it|
+        nil # some code here
+        if it < 5
+          next puts it
+        else
+          break puts 'BREAK'
+        end
+      end
+    RUBY
+  end
+
+  it 'does not register an offense when both branches exit the current scope in a method' do
+    expect_no_offenses(<<~RUBY)
+      def func
+        if something
+          return
+        else
+          raise 'error'
+        end
+      end
+    RUBY
+  end
+
+  it 'does not register an offense when both branches exit the current scope with `||`' do
+    expect_no_offenses(<<~RUBY)
+      def func
+        if something
+          work || raise('message')
+        else
+          test || raise('message')
+        end
+      end
+    RUBY
+  end
 
   context 'method in module' do
     it 'registers an offense for instance method' do
