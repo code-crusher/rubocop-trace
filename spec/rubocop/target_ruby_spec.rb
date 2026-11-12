@@ -575,6 +575,31 @@ RSpec.describe RuboCop::TargetRuby, :isolated_environment do
         end
       end
 
+      context 'when mise.toml contains a ruby version as an inline table' do
+        let(:mise_toml) { ['[tools]', 'ruby = { version = "3.0.0", lazy = true }'] }
+        let(:ruby_version_to_f) { 3.0 }
+
+        it 'reads it to determine the target ruby version' do
+          expect(target_ruby.version).to eq ruby_version_to_f
+        end
+
+        context 'when the inline table uses a colon' do
+          let(:mise_toml) { ['[tools]', 'ruby = { version: "3.0.0", lazy: true }'] }
+
+          it 'reads it to determine the target ruby version' do
+            expect(target_ruby.version).to eq ruby_version_to_f
+          end
+        end
+
+        context 'when the inline table has spaces around the equals sign' do
+          let(:mise_toml) { ['[tools]', 'ruby = {version = "3.0.0"}'] }
+
+          it 'reads it to determine the target ruby version' do
+            expect(target_ruby.version).to eq ruby_version_to_f
+          end
+        end
+      end
+
       context 'when mise.toml contains different runtimes' do
         let(:mise_toml) { ['[tools]', 'nodejs = "14.9.0"', 'ruby = "3.0.0"'] }
         let(:ruby_version_to_f) { 3.0 }
