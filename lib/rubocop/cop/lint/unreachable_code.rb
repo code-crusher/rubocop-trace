@@ -7,6 +7,9 @@ module RuboCop
       # The check is based on the presence of flow-of-control
       # statements in non-final position in `begin` (implicit) blocks.
       #
+      # The offense is reported on the statement that makes the following code
+      # unreachable, rather than on every statement that follows it.
+      #
       # @example
       #
       #   # bad
@@ -30,12 +33,18 @@ module RuboCop
       #     do_something
       #   end
       class UnreachableCode < Base
-        MSG = 'Unreachable code detected.'
+        MSG = 'Code following an always-true guard statement will never run.'
 
         def initialize(config = nil, options = nil)
           super
           @redefined = []
+          @reported_guards = []
           @instance_eval_count = 0
+        end
+
+        def on_new_investigation
+          super
+          @reported_guards = []
         end
 
         def on_block(node)
@@ -50,23 +59,36 @@ module RuboCop
         end
 
         def on_begin(node)
+          # A guard that was already reported for an enclosing branch makes the
+          # code it contains unreachable too, but reporting it again would only
+          # repeat the same warning.
+          return if reported_guard_ancestor?(node)
+
           expressions = *node
 
-          # Once a flow-of-control statement is reached, every following statement
-          # in the block is unreachable, not just the one immediately after it.
-          flow_reached = false
-          expressions.each_with_index do |expression, index|
-            if flow_reached
-              add_offense(expression)
-            elsif index < expressions.size - 1 && flow_expression?(expression)
-              flow_reached = true
-            end
+          # The first flow-of-control statement that is not the final expression
+          # makes everything after it unreachable, so it is the only statement
+          # worth reporting.
+          expressions[0...-1].each do |expression|
+            guard = unconditional_guard(expression)
+            next unless guard
+
+            @reported_guards << guard
+            add_offense(guard)
+            break
           end
         end
 
         alias on_kwbegin on_begin
 
         private
+
+        # Checks whether the node is inside a guard that has already been
+        # reported, in which case its own unreachable code is not reported
+        # again.
+        def reported_guard_ancestor?(node)
+          @reported_guards.any? { |guard| guard.source_range.contains?(node.source_range) }
+        end
 
         def redefinable_flow_method?(method)
           %i[raise fail throw exit exit! abort].include? method
@@ -83,40 +105,49 @@ module RuboCop
           }
         PATTERN
 
-        # rubocop:disable-next Metrics/MethodLength
-        def flow_expression?(node)
-          return report_on_flow_command?(node) if flow_command?(node)
+        # Returns the node that makes the expressions following it unreachable,
+        # or `nil` if the given expression can complete normally.
+        # rubocop:disable-next Metrics/CyclomaticComplexity
+        def unconditional_guard(node)
+          return node if flow_command?(node) && report_on_flow_command?(node)
 
           case node.type
           when :begin, :kwbegin
-            expressions = *node
-            expressions.any? { |expr| flow_expression?(expr) }
+            guard_in_begin(node)
           when :if
-            check_if(node)
+            node if check_if(node)
           when :case, :case_match
-            check_case(node)
+            node if check_case(node)
           when :def, :defs
             register_redefinition(node)
-            false
-          else
-            false
+            nil
           end
+        end
+
+        def guard_in_begin(node)
+          expressions = *node
+          expressions.each do |expression|
+            guard = unconditional_guard(expression)
+            return guard if guard
+          end
+          nil
         end
 
         def check_if(node)
           if_branch = node.if_branch
           else_branch = node.else_branch
-          if_branch && else_branch && flow_expression?(if_branch) && flow_expression?(else_branch)
+          if_branch && else_branch && unconditional_guard(if_branch) &&
+            unconditional_guard(else_branch)
         end
 
         def check_case(node)
           else_branch = node.else_branch
           return false unless else_branch
-          return false unless flow_expression?(else_branch)
+          return false unless unconditional_guard(else_branch)
 
           branches = node.case_type? ? node.when_branches : node.in_pattern_branches
 
-          branches.all? { |branch| branch.body && flow_expression?(branch.body) }
+          branches.all? { |branch| branch.body && unconditional_guard(branch.body) }
         end
 
         def register_redefinition(node)

@@ -2727,6 +2727,7 @@ Lint/UnreachableCode:
   Description: 'Checks for unreachable code.'
   Enabled: true
   VersionAdded: '0.9'
+  VersionChanged: '<<next>>'
 
 Lint/UnreachableLoop:
   Description: 'Checks for loops that will have at most one iteration.'

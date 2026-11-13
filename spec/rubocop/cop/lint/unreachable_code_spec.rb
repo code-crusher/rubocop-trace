@@ -14,13 +14,66 @@ RSpec.describe RuboCop::Cop::Lint::UnreachableCode, :config do
     head + body + tail
   end
 
-  it 'registers an offense for every statement following a flow-of-control statement' do
+  it 'registers a single offense on the statement that makes the following code unreachable' do
     expect_offense(wrap(<<~RUBY))
       return
+      ^^^^^^ Code following an always-true guard statement will never run.
       bar
-      ^^^ Unreachable code detected.
       baz
-      ^^^ Unreachable code detected.
+    RUBY
+  end
+
+  it 'registers an offense on the guard rather than on the unreachable code' do
+    expect_offense(<<~RUBY)
+      def main
+        return # if 2 + 2 == 4
+        ^^^^^^ Code following an always-true guard statement will never run.
+
+        _meaning = 42
+        puts 'Whatever you say'
+        raise PizzaDough if Date.today.friday?
+      end
+    RUBY
+  end
+
+  it 'registers a single offense when a guard contains unreachable code itself' do
+    expect_offense(<<~RUBY)
+      def main
+        if cond
+        ^^^^^^^ Code following an always-true guard statement will never run.
+          return
+          unreachable
+        else
+          return
+          unreachable
+        end
+        also_unreachable
+      end
+    RUBY
+  end
+
+  it 'registers a single offense when an unconditional `begin` is followed by code' do
+    expect_offense(<<~RUBY)
+      def main
+        begin
+          return
+          ^^^^^^ Code following an always-true guard statement will never run.
+          unreachable
+        end
+        also_unreachable
+      end
+    RUBY
+  end
+
+  it 'registers an offense for a guard that is the only expression of a `begin`' do
+    expect_offense(<<~RUBY)
+      def main
+        begin
+          return
+          ^^^^^^ Code following an always-true guard statement will never run.
+          unreachable
+        end
+      end
     RUBY
   end
 
@@ -29,99 +82,99 @@ RSpec.describe RuboCop::Cop::Lint::UnreachableCode, :config do
     next if t == 'retry' && ENV['PARSER_ENGINE'] == 'parser_prism'
 
     it "registers an offense for `#{t}` before other statements" do
-      expect_offense(wrap(<<~RUBY))
-        #{t}
+      expect_offense(wrap(<<~RUBY), t: t)
+        %{t}
+        ^{t} Code following an always-true guard statement will never run.
         bar
-        ^^^ Unreachable code detected.
       RUBY
     end
 
     it "registers an offense for `#{t}` in `begin`" do
-      expect_offense(wrap(<<~RUBY))
+      expect_offense(wrap(<<~RUBY), t: t)
         begin
-          #{t}
+          %{t}
+          ^{t} Code following an always-true guard statement will never run.
           bar
-          ^^^ Unreachable code detected.
         end
       RUBY
     end
 
     it "registers an offense for `#{t}` in all `if` branches" do
-      expect_offense(wrap(<<~RUBY))
+      expect_offense(wrap(<<~RUBY), t: t)
         if cond
-          #{t}
+        ^^^^^^^ Code following an always-true guard statement will never run.
+          %{t}
         else
-          #{t}
+          %{t}
         end
         bar
-        ^^^ Unreachable code detected.
       RUBY
     end
 
     it "registers an offense for `#{t}` in all `if` branches with other expressions" do
-      expect_offense(wrap(<<~RUBY))
+      expect_offense(wrap(<<~RUBY), t: t)
         if cond
+        ^^^^^^^ Code following an always-true guard statement will never run.
           something
-          #{t}
+          %{t}
         else
           something2
-          #{t}
+          %{t}
         end
         bar
-        ^^^ Unreachable code detected.
       RUBY
     end
 
     it "registers an offense for `#{t}` in all `if` and `elsif` branches" do
-      expect_offense(wrap(<<~RUBY))
+      expect_offense(wrap(<<~RUBY), t: t)
         if cond
+        ^^^^^^^ Code following an always-true guard statement will never run.
           something
-          #{t}
+          %{t}
         elsif cond2
           something2
-          #{t}
+          %{t}
         else
           something3
-          #{t}
+          %{t}
         end
         bar
-        ^^^ Unreachable code detected.
       RUBY
     end
 
     it "registers an offense for `#{t}` in all `case` branches" do
-      expect_offense(wrap(<<~RUBY))
+      expect_offense(wrap(<<~RUBY), t: t)
         case cond
+        ^^^^^^^^^ Code following an always-true guard statement will never run.
         when 1
           something
-          #{t}
+          %{t}
         when 2
           something2
-          #{t}
+          %{t}
         else
           something3
-          #{t}
+          %{t}
         end
         bar
-        ^^^ Unreachable code detected.
       RUBY
     end
 
     it "registers an offense for `#{t}` in all `case` pattern branches" do
-      expect_offense(wrap(<<~RUBY))
+      expect_offense(wrap(<<~RUBY), t: t)
         case cond
+        ^^^^^^^^^ Code following an always-true guard statement will never run.
         in 1
           something
-          #{t}
+          %{t}
         in 2
           something2
-          #{t}
+          %{t}
         else
           something3
-          #{t}
+          %{t}
         end
         bar
-        ^^^ Unreachable code detected.
       RUBY
     end
 
@@ -229,32 +282,32 @@ RSpec.describe RuboCop::Cop::Lint::UnreachableCode, :config do
     next if %w[return next break retry redo].include? t
 
     it "registers an offense for `#{t}` after `instance_eval`" do
-      expect_offense <<~RUBY
+      expect_offense(<<~RUBY, t: t)
         class Dummy
-          def #{t}; end
+          def %{t}; end
         end
 
         d = Dummy.new
         d.instance_eval do
-          #{t}
+          %{t}
           bar
         end
 
-        #{t}
+        %{t}
+        ^{t} Code following an always-true guard statement will never run.
         bar
-        ^^^ Unreachable code detected.
       RUBY
     end
 
     it "registers an offense for `#{t}` with nested redefinition" do
-      expect_offense <<~RUBY
+      expect_offense(<<~RUBY, t: t)
         def foo
-          def #{t}; end
+          def %{t}; end
         end
 
-        #{t}
+        %{t}
+        ^{t} Code following an always-true guard statement will never run.
         bar
-        ^^^ Unreachable code detected.
       RUBY
     end
 
@@ -279,14 +332,14 @@ RSpec.describe RuboCop::Cop::Lint::UnreachableCode, :config do
     end
 
     it "registers an offense for `self.#{t}` with nested redefinition" do
-      expect_offense <<~RUBY
+      expect_offense(<<~RUBY, t: t)
         def foo
-          def self.#{t}; end
+          def self.%{t}; end
         end
 
-        #{t}
+        %{t}
+        ^{t} Code following an always-true guard statement will never run.
         bar
-        ^^^ Unreachable code detected.
       RUBY
     end
 
@@ -370,12 +423,12 @@ RSpec.describe RuboCop::Cop::Lint::UnreachableCode, :config do
     end
 
     it "registers an offense for redefined `#{t}` if it is called on Kernel" do
-      expect_offense <<~RUBY
-        def #{t}; end
+      expect_offense(<<~RUBY, t: t)
+        def %{t}; end
 
-        Kernel.#{t}
+        Kernel.%{t}
+        ^^^^^^^^{t} Code following an always-true guard statement will never run.
         foo
-        ^^^ Unreachable code detected.
       RUBY
     end
 
@@ -389,16 +442,16 @@ RSpec.describe RuboCop::Cop::Lint::UnreachableCode, :config do
     end
 
     it "registers an offense for `#{t}` inside `instance_eval` if it is called on Kernel" do
-      expect_offense <<~RUBY
+      expect_offense(<<~RUBY, t: t)
         class Dummy
-          def #{t}; end
+          def %{t}; end
         end
 
         d = Dummy.new
         d.instance_eval do
-          Kernel.#{t}
+          Kernel.%{t}
+          ^^^^^^^^{t} Code following an always-true guard statement will never run.
           foo
-          ^^^ Unreachable code detected.
         end
       RUBY
     end
