@@ -169,6 +169,190 @@ RSpec.describe RuboCop::Cop::Style::SafeNavigation, :config do
     RUBY
   end
 
+  it 'registers an offense for `and`ed negated nil checks on the same variable' do
+    expect_offense(<<~RUBY)
+      !foo.nil? && !foo.keys.nil?
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Use safe navigation (`&.`) instead [...]
+    RUBY
+
+    expect_correction(<<~RUBY)
+      !foo&.keys.nil?
+    RUBY
+  end
+
+  it 'registers an offense for `and`ed negated nil checks on a longer method chain' do
+    expect_offense(<<~RUBY)
+      !foo.nil? && !foo.one.two.nil?
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Use safe navigation (`&.`) instead [...]
+    RUBY
+
+    expect_correction(<<~RUBY)
+      !foo&.one&.two.nil?
+    RUBY
+  end
+
+  it 'registers an offense for `and`ed negated nil checks on a variable other than a local' do
+    expect_offense(<<~RUBY)
+      !@foo.nil? && !@foo.keys.nil?
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Use safe navigation (`&.`) instead [...]
+    RUBY
+
+    expect_correction(<<~RUBY)
+      !@foo&.keys.nil?
+    RUBY
+  end
+
+  it 'registers an offense for `and`ed negated nil checks on a constant' do
+    expect_offense(<<~RUBY)
+      !FOO::BAR.nil? && !FOO::BAR.keys.nil?
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Use safe navigation (`&.`) instead [...]
+    RUBY
+
+    expect_correction(<<~RUBY)
+      !FOO::BAR&.keys.nil?
+    RUBY
+  end
+
+  it 'registers an offense for `and`ed negated nil checks in a parenthesized RHS' do
+    expect_offense(<<~RUBY)
+      !foo.nil? && (!foo.keys.nil?)
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Use safe navigation (`&.`) instead [...]
+    RUBY
+
+    expect_correction(<<~RUBY)
+      (!foo&.keys.nil?)
+    RUBY
+  end
+
+  it 'registers an offense for `and`ed negated nil checks when the `and` keyword is used' do
+    expect_offense(<<~RUBY)
+      !foo.nil? and !foo.keys.nil?
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Use safe navigation (`&.`) instead [...]
+    RUBY
+
+    expect_correction(<<~RUBY)
+      !foo&.keys.nil?
+    RUBY
+  end
+
+  it 'registers an offense for `and`ed negated nil checks guarded by a modifier `unless`' do
+    expect_offense(<<~RUBY)
+      bar unless !foo.nil? && !foo.keys.nil?
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Use safe navigation (`&.`) instead [...]
+    RUBY
+
+    expect_correction(<<~RUBY)
+      bar unless !foo&.keys.nil?
+    RUBY
+  end
+
+  it 'registers an offense for `and`ed negated nil checks guarded by a modifier `if`' do
+    expect_offense(<<~RUBY)
+      bar if !foo.nil? && !foo.keys.nil?
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Use safe navigation (`&.`) instead [...]
+    RUBY
+
+    expect_correction(<<~RUBY)
+      bar if !foo&.keys.nil?
+    RUBY
+  end
+
+  it 'registers an offense for `and`ed negated nil checks in an `if` condition' do
+    expect_offense(<<~RUBY)
+      if !foo.nil? && !foo.keys.nil?
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Use safe navigation (`&.`) instead [...]
+        bar
+      end
+    RUBY
+
+    expect_correction(<<~RUBY)
+      if !foo&.keys.nil?
+        bar
+      end
+    RUBY
+  end
+
+  it 'registers an offense for `and`ed negated nil checks in an assignment' do
+    expect_offense(<<~RUBY)
+      x = !foo.nil? && !foo.keys.nil?
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Use safe navigation (`&.`) instead [...]
+    RUBY
+
+    expect_correction(<<~RUBY)
+      x = !foo&.keys.nil?
+    RUBY
+  end
+
+  it 'registers an offense for `and`ed negated nil checks followed by another clause' do
+    expect_offense(<<~RUBY)
+      !foo.nil? && !foo.keys.nil? && bar
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Use safe navigation (`&.`) instead [...]
+    RUBY
+
+    expect_correction(<<~RUBY)
+      !foo&.keys.nil? && bar
+    RUBY
+  end
+
+  it 'registers an offense for `and`ed negated nil checks preceded by another clause' do
+    expect_offense(<<~RUBY)
+      bar && !foo.nil? && !foo.keys.nil?
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Use safe navigation (`&.`) instead [...]
+    RUBY
+
+    expect_correction(<<~RUBY)
+      bar && !foo&.keys.nil?
+    RUBY
+  end
+
+  it 'registers an offense for a chain of `and`ed negated nil checks on nested receivers' do
+    expect_offense(<<~RUBY)
+      !foo.nil? && !foo.one.nil? && !foo.one.two.nil?
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^ Use safe navigation (`&.`) instead [...]
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Use safe navigation (`&.`) instead [...]
+    RUBY
+
+    expect_correction(<<~RUBY)
+      !foo&.one&.two.nil?
+    RUBY
+  end
+
+  it 'allows `and`ed negated nil checks on different variables' do
+    expect_no_offenses(<<~RUBY)
+      !foo.nil? && !bar.keys.nil?
+    RUBY
+  end
+
+  it 'allows `and`ed negated nil checks when the LHS is not a nil check' do
+    expect_no_offenses(<<~RUBY)
+      foo && !foo.keys.nil?
+    RUBY
+  end
+
+  it 'allows `and`ed negated nil checks when the RHS is not a nil check' do
+    expect_no_offenses(<<~RUBY)
+      !foo.nil? && !foo.keys.empty?
+    RUBY
+  end
+
+  it 'allows `and`ed negated nil checks when the chain already uses safe navigation' do
+    expect_no_offenses(<<~RUBY)
+      !foo.nil? && !foo&.keys.nil?
+    RUBY
+  end
+
+  it 'allows `and`ed negated nil checks when the chain uses indexed access' do
+    expect_no_offenses(<<~RUBY)
+      !foo.nil? && !foo[:keys].nil?
+    RUBY
+  end
+
+  it 'allows `and`ed negated nil checks when the chain exceeds `MaxChainLength`' do
+    expect_no_offenses(<<~RUBY)
+      !foo.nil? && !foo.one.two.three.nil?
+    RUBY
+  end
+
   it 'allows an `and` with a `block` that contains an `and`' do
     expect_no_offenses(<<~RUBY)
       x? && y? do |b|

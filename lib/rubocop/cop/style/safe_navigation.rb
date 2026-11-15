@@ -65,6 +65,8 @@ module RuboCop
       #   foo && foo.bar { |e| e.something }
       #   foo && foo.bar(param) { |e| e.something }
       #
+      #   !foo.nil? && !foo.bar.nil?
+      #
       #   foo ? foo.bar : nil
       #   foo.nil? ? nil : foo.bar
       #   !foo.nil? ? foo.bar : nil
@@ -76,6 +78,7 @@ module RuboCop
       #   foo&.bar(param1, param2)
       #   foo&.bar { |e| e.something }
       #   foo&.bar(param) { |e| e.something }
+      #   !foo&.bar.nil?
       #   foo && foo.bar.baz.qux # method chain with more than 2 methods
       #   foo && foo.nil? # method that `nil` responds to
       #
@@ -146,6 +149,10 @@ module RuboCop
         # @!method not_nil_check?(node)
         def_node_matcher :not_nil_check?, '(send (send $_ :nil?) :!)'
 
+        # Matches `!foo.bar.nil?` and returns the `nil?` call node.
+        # @!method negated_nil_check?(node)
+        def_node_matcher :negated_nil_check?, '(send $(send _ :nil?) :!)'
+
         # @!method and_inside_begin?(node)
         def_node_matcher :and_inside_begin?, '`(begin and ...)'
 
@@ -165,20 +172,25 @@ module RuboCop
 
           removal_ranges = [begin_range(node, body), end_range(node, body)]
 
-          report_offense(node, method_chain, method_call, *removal_ranges) do |corrector|
+          report_offense(node, method_chain, method_call, removal_ranges) do |corrector|
             corrector.replace(receiver, checked_variable.source) if checked_variable.csend_type?
             corrector.insert_before(method_call.loc.dot, '&') unless method_call.safe_navigation?
           end
         end
 
-        def on_and(node) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength
+        def on_and(node) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity
           collect_and_clauses(node).each do |(lhs, lhs_operator_range), (rhs, _rhs_operator_range)|
             lhs_not_nil_check = not_nil_check?(lhs)
             lhs_receiver = lhs_not_nil_check || lhs
             rhs_receiver = find_matching_receiver_invocation(strip_begin(rhs), lhs_receiver)
 
-            next if !cop_config['ConvertCodeThatCanStartToReturnNil'] && lhs_not_nil_check
-            next unless offending_node?(node, lhs_receiver, rhs, rhs_receiver)
+            # `!foo.nil? && !foo.bar.nil?` can be collapsed into `!foo&.bar.nil?`, since
+            # `nil.nil?` is true: the negated nil check is `false` when the receiver is
+            # `nil`, just like the short-circuited `&&` expression it replaces.
+            nil_check_chain = nil_check_chain_for(lhs_not_nil_check, rhs, rhs_receiver)
+            next unless nil_check_chain || offending_node?(node, lhs_receiver, rhs, rhs_receiver)
+            next if !nil_check_chain && lhs_not_nil_check &&
+                    !cop_config['ConvertCodeThatCanStartToReturnNil']
 
             # Since we are evaluating every clause in potentially a complex chain of `and` nodes,
             # we need to ensure that there isn't an object check happening
@@ -186,10 +198,11 @@ module RuboCop
             next unless lhs_method_chain == lhs_receiver || lhs_not_nil_check
 
             report_offense(
-              node,
-              rhs, rhs_receiver,
-              range_with_surrounding_space(range: lhs.source_range, side: :right),
-              range_with_surrounding_space(range: lhs_operator_range, side: :right),
+              node, rhs, rhs_receiver,
+              [
+                range_with_surrounding_space(range: lhs.source_range, side: :right),
+                range_with_surrounding_space(range: lhs_operator_range, side: :right)
+              ],
               offense_range: range_between(lhs.source_range.begin_pos, rhs.source_range.end_pos)
             ) do |corrector|
               corrector.replace(rhs_receiver, lhs_receiver.source)
@@ -200,7 +213,7 @@ module RuboCop
 
         private
 
-        def report_offense(node, rhs, rhs_receiver, *removal_ranges, offense_range: node)
+        def report_offense(node, rhs, rhs_receiver, removal_ranges, offense_range: node)
           add_offense(offense_range) do |corrector|
             next if ignored_node?(node)
 
@@ -213,8 +226,50 @@ module RuboCop
 
             handle_comments(corrector, node, rhs)
 
-            add_safe_nav_to_all_methods_in_chain(corrector, rhs_receiver, rhs)
+            add_safe_nav_to_all_methods_in_chain(corrector, rhs_receiver, safe_nav_chain(rhs))
           end
+        end
+
+        # The last node to add safe navigation to. For a negated nil check such as
+        # `!foo.keys.nil?`, the `nil?` call must keep using `.`, since `nil` responds to it,
+        # so the chain ends at its receiver (`foo.keys`).
+        def safe_nav_chain(rhs)
+          negated_nil_check?(strip_begin(rhs))&.receiver || rhs
+        end
+
+        # Returns the method chain to add safe navigation to when the RHS is a negated nil
+        # check on the same variable as the LHS, e.g. `foo.keys` for
+        # `!foo.nil? && !foo.keys.nil?`.
+        #
+        # Both operands of such an `and` are booleans, so folding the LHS into the RHS as
+        # `!foo&.keys.nil?` preserves the return value: `nil.nil?` is `true`, which makes
+        # the negated nil check `false` for a `nil` receiver, exactly like the short
+        # circuited `and` expression it replaces.
+        def nil_check_chain_for(lhs_not_nil_check, rhs, rhs_receiver)
+          return nil unless lhs_not_nil_check && rhs_receiver
+
+          nil_check = negated_nil_check?(strip_begin(rhs))
+          return nil unless nil_check
+
+          method_chain = nil_check.receiver
+          return nil unless nil_check_chain_candidate?(method_chain, lhs_not_nil_check)
+          return nil unless dot_calls_only?(method_chain, rhs_receiver)
+          return nil if chain_length(method_chain, rhs_receiver) > max_chain_length
+
+          method_chain
+        end
+
+        # The chain must contain at least one call on the checked variable, otherwise there
+        # is nothing to add safe navigation to.
+        def nil_check_chain_candidate?(method_chain, lhs_not_nil_check)
+          method_chain.call_type? && method_chain != lhs_not_nil_check
+        end
+
+        def dot_calls_only?(node, base)
+          return true if node.equal?(base)
+          return false unless node.call_type? && node.dot?
+
+          dot_calls_only?(node.receiver, base)
         end
 
         def find_method_chain(node)

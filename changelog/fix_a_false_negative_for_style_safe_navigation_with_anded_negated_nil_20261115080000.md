@@ -1,0 +1,1 @@
+* [#15086](https://github.com/rubocop/rubocop/issues/15086): Fix a false negative for `Style/SafeNavigation` when a negated nil check is combined with `&&` with another negated nil check on the same receiver. ([@cf-credits-agent][])
