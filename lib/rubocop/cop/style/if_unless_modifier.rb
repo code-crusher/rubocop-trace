@@ -72,6 +72,37 @@ module RuboCop
       #     do_something
       #   end
       #
+      # @example AllowConsecutiveConditionals: false (default)
+      #   # bad
+      #   if foo
+      #     do_foo
+      #   end
+      #
+      #   if bar
+      #     do_bar
+      #   end
+      #
+      # @example AllowConsecutiveConditionals: true
+      #   # good
+      #   if foo
+      #     do_foo
+      #   end
+      #
+      #   if bar
+      #     do_bar
+      #   end
+      #
+      #   # bad
+      #   if foo
+      #     do_foo
+      #   end
+      #
+      #   do_something
+      #
+      #   if bar
+      #     do_bar
+      #   end
+      #
       class IfUnlessModifier < Base
         include StatementModifier
         include RangeHelp
@@ -145,9 +176,30 @@ module RuboCop
 
         def message(node)
           if single_line_as_modifier?(node) && !named_capture_in_condition?(node)
+            # Only the switch to the modifier form is suppressed: a modifier form that
+            # is too long is expanded to the block form, which keeps the chain
+            # consistent rather than breaking it.
+            return if allowed_consecutive_conditionals? && consecutive_conditionals?(node)
+
             parenthesize?(node) ? MSG_USE_MODIFIER_PARENS : MSG_USE_MODIFIER
           elsif too_long_due_to_modifier?(node)
             MSG_USE_NORMAL
+          end
+        end
+
+        def allowed_consecutive_conditionals?
+          cop_config.fetch('AllowConsecutiveConditionals', false)
+        end
+
+        # A conditional is consecutive when it is a statement in its own right and a
+        # sibling statement is a conditional as well. A conditional nested in an
+        # expression, such as an array element or a call argument, has no symmetry to
+        # preserve.
+        def consecutive_conditionals?(node)
+          return false unless node.parent&.type?(:begin, :kwbegin)
+
+          [node.left_sibling, node.right_sibling].compact.any? do |sibling|
+            sibling.if_type? && !sibling.ternary?
           end
         end
 

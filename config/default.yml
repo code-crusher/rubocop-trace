@@ -4723,7 +4723,11 @@ Style/IfUnlessModifier:
   Preview:
     Enabled: false
   VersionAdded: '0.9'
-  VersionChanged: '0.30'
+  VersionChanged: '<<next>>'
+  # When true, `if`/`unless` blocks that are consecutive with another
+  # `if`/`unless` block are not reported, so that a chain of conditionals keeps
+  # a consistent style.
+  AllowConsecutiveConditionals: false
 
 Style/IfUnlessModifierOfIfUnless:
   Description: >-

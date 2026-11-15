@@ -2067,4 +2067,231 @@ RSpec.describe RuboCop::Cop::Style::IfUnlessModifier, :config do
       end
     end
   end
+
+  context 'AllowConsecutiveConditionals' do
+    context 'when `false` (default)' do
+      let(:cop_config) { { 'AllowConsecutiveConditionals' => false } }
+
+      it 'registers an offense for consecutive `if` blocks' do
+        expect_offense(<<~RUBY)
+          if foo
+          ^^ Favor modifier `if` usage [...]
+            do_foo
+          end
+
+          if bar
+          ^^ Favor modifier `if` usage [...]
+            do_bar
+          end
+        RUBY
+
+        expect_correction(<<~RUBY)
+          do_foo if foo
+
+          do_bar if bar
+        RUBY
+      end
+    end
+
+    context 'when `true`' do
+      let(:cop_config) { { 'AllowConsecutiveConditionals' => true } }
+
+      it 'does not register an offense for consecutive `if` blocks' do
+        expect_no_offenses(<<~RUBY)
+          if foo
+            do_foo
+          end
+
+          if bar
+            do_bar
+          end
+        RUBY
+      end
+
+      it 'does not register an offense for an `if` followed by an `unless`' do
+        expect_no_offenses(<<~RUBY)
+          if foo
+            do_foo
+          end
+
+          unless bar
+            do_bar
+          end
+        RUBY
+      end
+
+      it 'does not register an offense when only one of the conditionals can be a modifier' do
+        expect_no_offenses(<<~RUBY)
+          if params[:foo]
+            process(params[:foo]) # a comment that makes the modifier form too long
+          end
+
+          if params[:bar]
+            process(params[:bar])
+          end
+        RUBY
+      end
+
+      it 'does not register an offense when the conditional is preceded by another one' do
+        expect_no_offenses(<<~RUBY)
+          def do_something
+            do_something_else
+
+            if foo
+              do_foo
+            end
+
+            if bar
+              do_bar
+            end
+          end
+        RUBY
+      end
+
+      it 'does not register an offense for consecutive conditionals inside a `begin` block' do
+        expect_no_offenses(<<~RUBY)
+          begin
+            if foo
+              do_foo
+            end
+
+            if bar
+              do_bar
+            end
+          end
+        RUBY
+      end
+
+      it 'does not register an offense for consecutive conditionals in a branch' do
+        expect_no_offenses(<<~RUBY)
+          case value
+          when 1
+            if foo
+              do_foo
+            end
+
+            if bar
+              do_bar
+            end
+          end
+        RUBY
+      end
+
+      it 'does not register an offense for a chain of three conditionals' do
+        expect_no_offenses(<<~RUBY)
+          if foo
+            do_foo
+          end
+
+          if bar
+            do_bar
+          end
+
+          if baz
+            do_baz
+          end
+        RUBY
+      end
+
+      it 'registers an offense for an isolated conditional' do
+        expect_offense(<<~RUBY)
+          if foo
+          ^^ Favor modifier `if` usage [...]
+            do_foo
+          end
+        RUBY
+      end
+
+      it 'does not register an offense when the preceding sibling is a modifier form' do
+        expect_no_offenses(<<~RUBY)
+          do_foo if foo
+
+          if bar
+            do_bar
+          end
+        RUBY
+      end
+
+      it 'registers an offense when the preceding sibling is a ternary operator' do
+        expect_offense(<<~RUBY)
+          foo ? do_foo : do_bar
+
+          if bar
+          ^^ Favor modifier `if` usage [...]
+            do_bar
+          end
+        RUBY
+      end
+
+      it 'registers an offense for conditionals that are array elements' do
+        expect_offense(<<~RUBY)
+          [
+            (if foo
+             ^^ Favor modifier `if` usage [...]
+               do_foo
+             end),
+            (if bar
+             ^^ Favor modifier `if` usage [...]
+               do_bar
+             end)
+          ]
+        RUBY
+      end
+
+      it 'registers an offense for conditionals separated by another statement' do
+        expect_offense(<<~RUBY)
+          if foo
+          ^^ Favor modifier `if` usage [...]
+            do_foo
+          end
+
+          do_something
+
+          if bar
+          ^^ Favor modifier `if` usage [...]
+            do_bar
+          end
+        RUBY
+      end
+
+      it 'registers an offense for conditionals in separate method definitions' do
+        expect_offense(<<~RUBY)
+          def foo
+            if condition
+            ^^ Favor modifier `if` usage [...]
+              do_foo
+            end
+          end
+
+          def bar
+            if condition
+            ^^ Favor modifier `if` usage [...]
+              do_bar
+            end
+          end
+        RUBY
+      end
+
+      it 'registers an offense for a too-long modifier form next to a conditional' do
+        expect_offense(<<~RUBY)
+          if foo
+            do_foo
+          end
+
+          do_bar if condition_that_is_long_enough_to_make_this_line_go_past_the_limit_of_eighty
+                 ^^ Modifier form of `if` makes the line too long.
+        RUBY
+
+        expect_correction(<<~RUBY)
+          if foo
+            do_foo
+          end
+
+          if condition_that_is_long_enough_to_make_this_line_go_past_the_limit_of_eighty
+            do_bar
+          end
+        RUBY
+      end
+    end
+  end
 end
