@@ -201,6 +201,52 @@ RSpec.describe RuboCop::DirectiveComment do
     end
   end
 
+  describe '#truncated_cop_list?' do
+    subject { directive_comment.truncated_cop_list? }
+
+    context 'when cop names are separated by spaces' do
+      let(:text) { '# rubocop:disable Layout/LineLength Metrics/AbcSize' }
+
+      it { is_expected.to be(true) }
+    end
+
+    context 'when a cop name has text glued to it' do
+      let(:text) { '# rubocop:disable Layout/LineLength:foo' }
+
+      it { is_expected.to be(true) }
+    end
+
+    context 'when a cop name is followed by a comma' do
+      let(:text) { '# rubocop:disable Layout/LineLength,' }
+
+      it { is_expected.to be(true) }
+    end
+
+    context 'when an ordinary trailing comment follows a cop name' do
+      let(:text) { '# rubocop:disable Metrics/MethodLength with a comment why' }
+
+      it { is_expected.to be(false) }
+    end
+
+    context 'when a `--` reason follows a cop name' do
+      let(:text) { '# rubocop:disable Layout/LineLength -- because it is long' }
+
+      it { is_expected.to be(false) }
+    end
+
+    context 'when cop names are separated by commas' do
+      let(:text) { '# rubocop:disable Layout/LineLength, Metrics/AbcSize' }
+
+      it { is_expected.to be(false) }
+    end
+
+    context 'when there is no trailing text' do
+      let(:text) { '# rubocop:disable Layout/LineLength' }
+
+      it { is_expected.to be(false) }
+    end
+  end
+
   describe '#invalid_signed_args?' do
     subject { directive_comment.invalid_signed_args? }
 

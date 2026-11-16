@@ -194,6 +194,84 @@ RSpec.describe RuboCop::CommentConfig do
     end
   end
 
+  describe 'malformed directives with a truncated cop list' do
+    context 'when cop names are separated by spaces' do
+      let(:source) do
+        <<~RUBY
+          # rubocop:disable Layout/LineLength Metrics/AbcSize
+          x = 1
+          # rubocop:enable Layout/LineLength
+          y = 1
+        RUBY
+      end
+
+      it 'does not disable any cop' do
+        expect(comment_config.cop_disabled_line_ranges['Layout/LineLength']).to be_empty
+      end
+    end
+
+    context 'when a cop name has text glued to it' do
+      let(:source) do
+        <<~RUBY
+          # rubocop:disable Layout/LineLength:foo
+          x = 1
+          # rubocop:enable Layout/LineLength
+          y = 1
+        RUBY
+      end
+
+      it 'does not disable any cop' do
+        expect(comment_config.cop_disabled_line_ranges['Layout/LineLength']).to be_empty
+      end
+    end
+
+    context 'when a cop name is followed by a comma' do
+      let(:source) do
+        <<~RUBY
+          # rubocop:disable Layout/LineLength,
+          x = 1
+          # rubocop:enable Layout/LineLength
+          y = 1
+        RUBY
+      end
+
+      it 'does not disable any cop' do
+        expect(comment_config.cop_disabled_line_ranges['Layout/LineLength']).to be_empty
+      end
+    end
+
+    context 'when an `enable` directive has a truncated cop list' do
+      let(:source) do
+        <<~RUBY
+          # rubocop:disable Layout/LineLength
+          x = 1
+          # rubocop:enable Layout/LineLength Metrics/AbcSize
+          y = 1
+        RUBY
+      end
+
+      it 'does not re-enable the cop' do
+        expect(comment_config.cop_disabled_line_ranges['Layout/LineLength']).to eq([1..Float::INFINITY])
+      end
+    end
+
+    context 'when an ordinary trailing comment follows a complete cop list' do
+      let(:source) do
+        <<~RUBY
+          # rubocop:disable Metrics/MethodLength with a comment why
+          def some_method
+            puts 'foo'
+          end
+          # rubocop:enable Metrics/MethodLength
+        RUBY
+      end
+
+      it 'still disables the listed cops' do
+        expect(comment_config.cop_disabled_line_ranges['Metrics/MethodLength']).to eq([1..5])
+      end
+    end
+  end
+
   describe 'disable-next directives' do
     let(:source) do
       <<~RUBY

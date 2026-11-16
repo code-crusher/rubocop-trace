@@ -204,6 +204,12 @@ module RuboCop
 
       processed_source.comments.each do |comment|
         directive = DirectiveComment.new(comment)
+        # A directive whose cop list was truncated (e.g. cop names separated
+        # by spaces instead of commas) is not honored at all - applying only
+        # the first parsed name while silently dropping the rest is the
+        # implicit behavior `Lint/CopDirectiveSyntax` exists to surface.
+        next if directive.truncated_cop_list?
+
         yield directive if directive.cop_names
       end
     end

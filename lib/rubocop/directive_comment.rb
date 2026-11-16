@@ -80,6 +80,20 @@ module RuboCop
       !(tail.empty? || tail.start_with?(TRAILING_COMMENT_MARKER))
     end
 
+    # Checks if the directive's cop list was truncated: the text after the
+    # parsed cop names starts like a continuation of the list (an
+    # uppercase-initial cop name, a colon, or a comma) rather than an
+    # ordinary trailing comment or a `--` reason. Honoring such a directive
+    # would silently act on only the first parsed name and drop the rest, so
+    # it is treated as inert; `Lint/CopDirectiveSyntax` flags it instead.
+    def truncated_cop_list?
+      tail = @match_data&.post_match&.lstrip
+      return false unless tail
+      return false if tail.empty? || tail.start_with?(TRAILING_COMMENT_MARKER)
+
+      tail.match?(/\A(?:[[:upper:]]|[:,])/)
+    end
+
     # Checks if the directive comment is missing a cop name
     def missing_cop_name?
       return false if push? || pop?
