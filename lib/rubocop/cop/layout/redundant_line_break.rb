@@ -46,6 +46,12 @@ module RuboCop
       #   # good
       #   foo(a) { |x| puts x }
       #
+      # @example InspectBlocks: true, IgnoreInspectPatterns: ['before']
+      #   # good
+      #   before do
+      #     do_something
+      #   end
+      #
       class RedundantLineBreak < Base
         include CheckAssignment
         include CheckSingleLineSuitability
@@ -205,9 +211,27 @@ module RuboCop
 
         def configured_to_not_be_inspected?(node)
           return true if other_cop_takes_precedence?(node)
+          return true if ignored_inspect_pattern?(node)
           return false if cop_config['InspectBlocks']
 
           node.any_block_type? || any_descendant?(node, :any_block, &:multiline?)
+        end
+
+        def ignored_inspect_pattern?(node)
+          block = node.any_block_type? ? node : multiline_block_descendant(node)
+          return false unless block
+
+          ignore_inspect_patterns.any? do |pattern|
+            Regexp.new(pattern).match?(block.method_name)
+          end
+        end
+
+        def ignore_inspect_patterns
+          Array(cop_config.fetch('IgnoreInspectPatterns', []))
+        end
+
+        def multiline_block_descendant(node)
+          node.each_descendant(:any_block).find(&:multiline?)
         end
 
         def other_cop_takes_precedence?(node)

@@ -1396,6 +1396,7 @@ Layout/RedundantLineBreak:
                  on a single line.
   Enabled: false
   InspectBlocks: false
+  IgnoreInspectPatterns: []
   VersionAdded: '1.13'
 
 Layout/RescueEnsureAlignment:

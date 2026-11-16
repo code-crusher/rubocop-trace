@@ -5,7 +5,10 @@ RSpec.describe RuboCop::Cop::Layout::RedundantLineBreak, :config do
     RuboCop::Config.new('Layout/LineLength' => {
                           'Enabled' => line_length_enabled, 'Max' => max_line_length
                         },
-                        'Layout/RedundantLineBreak' => { 'InspectBlocks' => inspect_blocks },
+                        'Layout/RedundantLineBreak' => {
+                          'InspectBlocks' => inspect_blocks,
+                          'IgnoreInspectPatterns' => ignore_inspect_patterns
+                        },
                         'Layout/SingleLineBlockChain' => {
                           'Enabled' => single_line_block_chain_enabled
                         })
@@ -13,6 +16,7 @@ RSpec.describe RuboCop::Cop::Layout::RedundantLineBreak, :config do
   let(:line_length_enabled) { true }
   let(:max_line_length) { 31 }
   let(:inspect_blocks) { false }
+  let(:ignore_inspect_patterns) { [] }
   let(:single_line_block_chain_enabled) { true }
 
   shared_examples 'common behavior' do
@@ -668,6 +672,39 @@ RSpec.describe RuboCop::Cop::Layout::RedundantLineBreak, :config do
         expect_correction(<<~RUBY)
           RSpec.shared_context do let(:ruby_version) { 2.4 } end
         RUBY
+      end
+
+      context 'when `IgnoreInspectPatterns` is configured' do
+        let(:ignore_inspect_patterns) { ['before'] }
+
+        it 'does not register an offense for a block whose receiver matches' do
+          expect_no_offenses(<<~RUBY)
+            before do
+              do_something
+            end
+          RUBY
+        end
+
+        it 'registers an offense for a block whose receiver does not match' do
+          expect_offense(<<~RUBY)
+            let(:a) do
+            ^^^^^^^^^^ Redundant line break detected.
+              something
+            end
+          RUBY
+
+          expect_correction(<<~RUBY)
+            let(:a) do something end
+          RUBY
+        end
+
+        it 'does not register an offense for a matching pattern as a descendant block' do
+          expect_no_offenses(<<~RUBY)
+            foo = before do
+              do_something
+            end
+          RUBY
+        end
       end
 
       context 'when Layout/SingleLineBlockChain is enabled' do
