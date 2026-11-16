@@ -5103,6 +5103,9 @@ Style/MultilineIfModifier:
   StyleGuide: '#no-multiline-if-modifiers'
   Enabled: true
   VersionAdded: '0.45'
+  VersionChanged: '1.93'
+  AllowedMethods: []
+  AllowedPatterns: []
 
 Style/MultilineIfThen:
   Description: 'Do not use then for multi-line if/unless.'

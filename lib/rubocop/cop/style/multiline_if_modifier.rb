@@ -14,10 +14,39 @@ module RuboCop
       #
       #   # good
       #   { result: 'ok' } if cond
+      #
+      # @example AllowedMethods: [] (default)
+      #
+      #   # bad
+      #   render json: widget do
+      #     process widget
+      #   end unless cond
+      #
+      # @example AllowedMethods: ['render']
+      #
+      #   # good
+      #   render json: widget do
+      #     process widget
+      #   end unless cond
+      #
+      # @example AllowedPatterns: [] (default)
+      #
+      #   # bad
+      #   render json: widget do
+      #     process widget
+      #   end unless cond
+      #
+      # @example AllowedPatterns: ['^render']
+      #
+      #   # good
+      #   render json: widget do
+      #     process widget
+      #   end unless cond
       class MultilineIfModifier < Base
         include StatementModifier
         include Alignment
         include RangeHelp
+        include AllowedMethods
         extend AutoCorrector
 
         MSG = 'Favor a normal %<keyword>s-statement over a modifier ' \
@@ -26,6 +55,7 @@ module RuboCop
         def on_if(node)
           return if part_of_ignored_node?(node)
           return unless node.modifier_form? && node.body.multiline?
+          return if allowed_method_or_pattern?(node.body)
 
           add_offense(node, message: format(MSG, keyword: node.keyword)) do |corrector|
             autocorrect(corrector, node)
@@ -34,6 +64,25 @@ module RuboCop
         end
 
         private
+
+        # A multiline body that is a method call, possibly with a block attached
+        # (`render json: widget do ... end`), is allowed when its method name is
+        # allowed. Other node shapes have no method name to match against.
+        #
+        # `AllowedPattern` is not included because `StatementModifier` defines
+        # `allowed_patterns` for `Layout/LineLength` interplay.
+        def allowed_method_or_pattern?(body)
+          send_node = body.send_type? ? body : (body.send_node if body.any_block_type?)
+          return false unless send_node
+
+          allowed_method?(send_node.method_name) || allowed_source_pattern?(send_node)
+        end
+
+        def allowed_source_pattern?(send_node)
+          cop_config.fetch('AllowedPatterns', []).any? do |pattern|
+            Regexp.new(pattern).match?(send_node.source)
+          end
+        end
 
         def autocorrect(corrector, node)
           condition_heredoc, body_heredoc = [node.condition, node.body].map do |part|

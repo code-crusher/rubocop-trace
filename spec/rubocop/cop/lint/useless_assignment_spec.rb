@@ -2709,6 +2709,17 @@ RSpec.describe RuboCop::Cop::Lint::UselessAssignment, :config do
     end
   end
 
+  context 'when a variable is referenced only by a shorthand keyword argument', :ruby31 do
+    it 'accepts' do
+      expect_no_offenses(<<~RUBY)
+        def show
+          status = @widget.available? ? :ok : :not_found
+          render json: @widget, status:
+        end
+      RUBY
+    end
+  end
+
   context 'when a block argument is not used' do
     it 'accepts' do
       expect_no_offenses(<<~RUBY)

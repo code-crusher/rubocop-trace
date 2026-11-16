@@ -283,4 +283,71 @@ RSpec.describe RuboCop::Cop::Style::MultilineIfModifier, :config do
       RUBY
     end
   end
+
+  context 'when the multiline body is a method call', :ruby31 do
+    it 'registers an offense by default' do
+      expect_offense(<<~RUBY)
+        render json: widget, status: do
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Favor a normal unless-statement over a modifier clause in a multiline statement.
+          process widget
+        end unless cond
+      RUBY
+    end
+
+    context 'when AllowedMethods is configured' do
+      let(:cop_config) { { 'AllowedMethods' => ['render'] } }
+
+      it 'does not register an offense when the method is allowed' do
+        expect_no_offenses(<<~RUBY)
+          render json: widget, status: do
+            process widget
+          end unless cond
+        RUBY
+      end
+
+      it 'does not register an offense for an allowed method with a safe navigation call' do
+        expect_no_offenses(<<~RUBY)
+          self&.render json: widget do
+            process widget
+          end unless cond
+        RUBY
+      end
+
+      it 'does not register an offense for an allowed method with a numbered block' do
+        expect_no_offenses(<<~RUBY)
+          render json: widget do
+            process _1
+          end unless cond
+        RUBY
+      end
+
+      it 'does not register an offense when a multiline send body is allowed' do
+        expect_no_offenses(<<~RUBY)
+          render :json,
+                 :status unless cond
+        RUBY
+      end
+
+      it 'registers an offense when a different method is used' do
+        expect_offense(<<~RUBY)
+          respond_with widget do
+          ^^^^^^^^^^^^^^^^^^^^^^ Favor a normal unless-statement over a modifier clause in a multiline statement.
+            process widget
+          end unless cond
+        RUBY
+      end
+    end
+
+    context 'when AllowedPatterns is configured' do
+      let(:cop_config) { { 'AllowedPatterns' => ['^render'] } }
+
+      it 'does not register an offense when the method matches an allowed pattern' do
+        expect_no_offenses(<<~RUBY)
+          render json: widget, status: do
+            process widget
+          end unless cond
+        RUBY
+      end
+    end
+  end
 end
