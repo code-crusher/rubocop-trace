@@ -1,0 +1,1 @@
+* [#14815](https://github.com/rubocop/rubocop/issues/14815): Add unsafe autocorrection for `Style/OpenStructUse` to replace `OpenStruct.new(keys: values)` with `Data.define(*keys).new(*values)`. ([@corsonknowles][])

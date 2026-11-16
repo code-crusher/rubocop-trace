@@ -5454,7 +5454,7 @@ Style/OpenStructUse:
   Enabled: pending
   Safe: false
   VersionAdded: '1.23'
-  VersionChanged: '1.51'
+  VersionChanged: '<<next>>'
 
 Style/OperatorMethodCall:
   Description: 'Checks for redundant dot before operator method call.'
