@@ -26,6 +26,7 @@ module RuboCop
         Preview
         Reference
         References
+        RuntimeDependent
         Safe
         SafeAutoCorrect
         Severity

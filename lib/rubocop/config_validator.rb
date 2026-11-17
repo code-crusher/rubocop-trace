@@ -13,7 +13,8 @@ module RuboCop
     # @api private
     INTERNAL_PARAMS = %w[Description StyleGuide Preview
                          VersionAdded VersionChanged VersionRemoved
-                         Reference References Safe SafeAutoCorrect].freeze
+                         Reference References Safe SafeAutoCorrect
+                         RuntimeDependent].freeze
     # @api private
     NEW_COPS_VALUES = %w[pending disable enable].freeze
     # @api private

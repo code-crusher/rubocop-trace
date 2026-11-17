@@ -1593,6 +1593,14 @@ RSpec.describe 'RuboCop::CLI options', :isolated_environment do # rubocop:disabl
         expect(YAML.safe_load(stdout)['Layout/LineLength']['Max']).to eq(120)
       end
     end
+
+    context 'with a runtime dependent cop given' do
+      let(:arguments) { ['Lint/ShadowedException'] }
+
+      it 'prints the cop marked as runtime dependent' do
+        expect(stdout).to include("  RuntimeDependent: true\n")
+      end
+    end
   end
 
   describe '--explain' do
@@ -1709,6 +1717,18 @@ RSpec.describe 'RuboCop::CLI options', :isolated_environment do # rubocop:disabl
 
       expect(stderr).to include('Metrics is a department, not a cop.')
       expect(stderr).to include('Metrics/')
+    end
+
+    it 'reports that a runtime dependent cop relies on runtime information' do
+      cli.run(['--explain', 'Lint/ShadowedException'])
+
+      expect(stdout).to include('Runtime:     analysis depends on runtime information')
+    end
+
+    it 'says nothing about runtime dependence for a pure cop' do
+      cli.run(['--explain', 'Style/Semicolon'])
+
+      expect(stdout).not_to include('Runtime:')
     end
   end
 

@@ -487,5 +487,27 @@ RSpec.describe RuboCop::Cop::Lint::ShadowedException, :config do
         RUBY
       end
     end
+
+    # https://github.com/rubocop/rubocop/issues/14724
+    context 'custom exception hierarchy' do
+      # The cop resolves rescued constants in the running process, so an
+      # offense for `rescue A` before `rescue B` requires `A` and `B` to be
+      # loaded. The cop is marked `RuntimeDependent: true` for this reason.
+      it 'registers an offense when the hierarchy is loaded' do
+        stub_const('A', Class.new(StandardError))
+        stub_const('B', Class.new(A))
+
+        expect_offense(<<~RUBY)
+          begin
+            a
+          rescue A
+          ^^^^^^^^ Do not shadow rescued Exceptions.
+            b
+          rescue B
+            c
+          end
+        RUBY
+      end
+    end
   end
 end

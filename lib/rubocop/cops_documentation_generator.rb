@@ -15,6 +15,7 @@ class CopsDocumentationGenerator # rubocop:disable Metrics/ClassLength
   STRUCTURE = {
     name:                  ->(data) { cop_header(data.cop) },
     required_ruby_version: ->(data) { required_ruby_version(data.cop) },
+    runtime_dependent:     ->(data) { runtime_dependent(data.cop) },
     properties:            ->(data) { properties(data.cop) },
     description:           ->(data) { "#{data.description}\n" },
     safety:                ->(data) { safety_object(data.safety_objects, data.cop) },
@@ -136,6 +137,16 @@ class CopsDocumentationGenerator # rubocop:disable Metrics/ClassLength
     end
 
     "NOTE: Requires Ruby version #{requirement}\n\n"
+  end
+
+  def runtime_dependent(cop)
+    return '' unless config.for_cop(cop)['RuntimeDependent']
+
+    "#{<<~NOTE.chomp}\n\n"
+      NOTE: This cop's analysis depends on runtime information, so its output can
+      vary with the environment RuboCop runs in (loaded features, filesystem state,
+      platform), even for unchanged source.
+    NOTE
   end
 
   # rubocop:disable-next Metrics/MethodLength
@@ -347,6 +358,7 @@ class CopsDocumentationGenerator # rubocop:disable Metrics/ClassLength
       StyleGuide
       Reference References
       Safe SafeAutoCorrect AutoCorrect
+      RuntimeDependent
       VersionAdded VersionChanged
     ]
     parameters = cop_config.reject { |k| non_display_keys.include? k }

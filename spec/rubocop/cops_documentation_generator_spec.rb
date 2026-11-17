@@ -47,6 +47,27 @@ RSpec.describe CopsDocumentationGenerator do
     end
   end
 
+  context 'when a cop is runtime dependent' do
+    around do |example|
+      new_global = RuboCop::Cop::Registry.new([RuboCop::Cop::Lint::ShadowedException])
+      RuboCop::Cop::Registry.with_temporary_global(new_global) { example.run }
+    end
+
+    it 'renders a note that its analysis depends on runtime information' do
+      Dir.mktmpdir do |tmpdir|
+        generator = described_class.new(departments: %w[Lint], base_dir: tmpdir)
+        expect { generator.call }.to output.to_stdout
+
+        page = File.read(File.join(tmpdir, 'docs/modules/ROOT/pages/cops_lint.adoc'))
+        expect(page).to include(<<~ADOC)
+          NOTE: This cop's analysis depends on runtime information, so its output can
+          vary with the environment RuboCop runs in (loaded features, filesystem state,
+          platform), even for unchanged source.
+        ADOC
+      end
+    end
+  end
+
   context 'when the department has its own `StyleGuideBaseURL`' do
     before do
       default_config = RuboCop::ConfigLoader.default_configuration

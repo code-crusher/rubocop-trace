@@ -2569,8 +2569,12 @@ Lint/SafeNavigationWithEmpty:
 Lint/ScriptPermission:
   Description: 'Grant script file execute permission.'
   Enabled: true
+  # Whether the cop's analysis depends on runtime information: it stats the
+  # inspected file and checks the platform, so its output depends on
+  # filesystem state and the operating system rather than source alone.
+  RuntimeDependent: true
   VersionAdded: '0.49'
-  VersionChanged: '0.50'
+  VersionChanged: '<<next>>'
 
 Lint/SelfAssignment:
   Description: 'Checks for self-assignments.'
@@ -2595,7 +2599,12 @@ Lint/ShadowedException:
                   before a lower level exception.
   StyleGuide: '#exception-ordering'
   Enabled: true
+  # Whether the cop's analysis depends on runtime information: it resolves
+  # the rescued exception constants in the running Ruby process, so its
+  # output can vary with the loaded feature set (e.g. via `RUBYOPT=-r`).
+  RuntimeDependent: true
   VersionAdded: '0.41'
+  VersionChanged: '<<next>>'
 
 Lint/ShadowingOuterLocalVariable:
   Description: >-

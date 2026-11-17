@@ -14,6 +14,7 @@ module RuboCop
       METADATA_KEYS = %w[
         Description StyleGuide Reference References Enabled Safe SafeAutoCorrect
         AutoCorrect VersionAdded VersionChanged Include Exclude Details Preview
+        RuntimeDependent
       ].freeze
 
       def initialize(cop_class, config)
@@ -58,8 +59,18 @@ module RuboCop
           "Safe:        #{@cop_config.fetch('Safe', true)}",
           "Autocorrect: #{autocorrect_description}",
           *version_lines,
+          *runtime_line,
           *scope_lines
         ]
+      end
+
+      # A cop marked `RuntimeDependent` resolves names or state in the running
+      # process, which explains output that differs between environments.
+      def runtime_line
+        return [] unless @cop_config['RuntimeDependent']
+
+        ['Runtime:     analysis depends on runtime information, ' \
+         'so output can vary with the environment RuboCop runs in']
       end
 
       # Which files the cop looks at. A cop that only runs on Gemfiles

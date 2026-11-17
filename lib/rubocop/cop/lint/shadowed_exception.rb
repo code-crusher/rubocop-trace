@@ -58,6 +58,15 @@ module RuboCop
       #     handle_standard_error
       #   end
       #
+      # NOTE: This cop is marked `RuntimeDependent` in the default configuration:
+      # it resolves the rescued exception constants in the running Ruby process,
+      # so whether it reports an offense can depend on the loaded feature set,
+      # not only on the inspected source. For example, given
+      # `A = Class.new(Exception)` and `B = Class.new(A)`, `rescue A` followed by
+      # `rescue B` is only reported when `A` and `B` are loaded (e.g. via
+      # `RUBYOPT=-r`), because only then can RuboCop tell that `B` descends
+      # from `A`.
+      #
       class ShadowedException < Base
         include RescueNode
         include RangeHelp

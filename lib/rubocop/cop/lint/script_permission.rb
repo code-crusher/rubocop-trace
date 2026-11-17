@@ -30,6 +30,11 @@ module RuboCop
       #
       #   puts 'hello, world'
       #
+      # NOTE: This cop is marked `RuntimeDependent` in the default configuration:
+      # it stats the inspected file and checks the platform, so its output
+      # depends on filesystem state and the operating system rather than on
+      # the source alone.
+      #
       class ScriptPermission < Base
         extend AutoCorrector
 

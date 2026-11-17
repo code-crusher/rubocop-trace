@@ -82,6 +82,10 @@ Each cop in https://github.com/rubocop/rubocop/blob/master/config/default.yml[co
 * `VersionChanged` — the last version that changed the cop's behavior or defaults
 * `Enabled` — whether the cop is enabled by default
 * `SafeAutoCorrect` — whether the autocorrection is safe (won't change behavior)
+* `RuntimeDependent` — whether the cop's analysis depends on runtime information
+  (loaded constants, filesystem state, platform) rather than only on the source
+  and the configuration, so its output can vary between environments even for
+  unchanged source, e.g. when features are loaded via `RUBYOPT=-r`
 
 Cop-related errors are silenced by default but can be surfaced using the
 `--raise-cop-error` option, which is useful for debugging.

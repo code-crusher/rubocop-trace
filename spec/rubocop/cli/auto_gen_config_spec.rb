@@ -628,6 +628,30 @@ RSpec.describe 'RuboCop::CLI --auto-gen-config', :isolated_environment do # rubo
       end
     end
 
+    context 'when working with a runtime dependent cop' do
+      it 'does not list `RuntimeDependent` as a configuration parameter' do
+        create_file('example.rb', <<~RUBY)
+          begin
+            something
+          rescue Exception
+            handle_exception
+          rescue StandardError
+            handle_standard_error
+          end
+        RUBY
+        expect(cli.run(['--auto-gen-config', '--only', 'Lint/ShadowedException'])).to eq(0)
+        expect($stderr.string).to eq('')
+
+        todo_contents = File.read('.rubocop_todo.yml').lines[8..].join
+        expect(todo_contents).to eq(<<~YAML)
+          # Offense count: 1
+          Lint/ShadowedException:
+            Exclude:
+              - 'example.rb'
+        YAML
+      end
+    end
+
     context 'when working with a cop who do not support autocorrection' do
       it 'can generate a todo list' do
         create_file('example1.rb', <<~RUBY)

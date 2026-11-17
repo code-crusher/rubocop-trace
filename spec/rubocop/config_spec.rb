@@ -215,6 +215,41 @@ RSpec.describe RuboCop::Config do
       end
     end
 
+    # `RuntimeDependent` is read-only metadata: only cops that RuboCop marks as
+    # runtime dependent list it, and setting it on any other cop is a warning
+    # rather than an error, like any unsupported parameter.
+    context 'when the configuration sets RuntimeDependent on a cop whose default config omits it' do
+      include_context 'mock console output'
+
+      before do
+        create_file(configuration_path, <<~YAML)
+          Lint/UselessAssignment:
+            RuntimeDependent: false
+        YAML
+      end
+
+      it 'prints a warning message' do
+        configuration
+        expect($stderr.string).to match(/does not support RuntimeDependent parameter./)
+      end
+    end
+
+    context 'when the configuration sets RuntimeDependent on a cop that is marked runtime dependent' do
+      include_context 'mock console output'
+
+      before do
+        create_file(configuration_path, <<~YAML)
+          Lint/ShadowedException:
+            RuntimeDependent: true
+        YAML
+      end
+
+      it 'does not print a warning' do
+        configuration
+        expect($stderr.string).not_to include('does not support RuntimeDependent parameter')
+      end
+    end
+
     context 'when the configuration includes a valid EnforcedStyle' do
       before do
         create_file(configuration_path, <<~YAML)
