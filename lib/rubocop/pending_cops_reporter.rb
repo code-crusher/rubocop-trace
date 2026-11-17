@@ -12,7 +12,7 @@ module RuboCop
       PENDING_BANNER = <<~BANNER
         The following cops were added to RuboCop, but are not configured. Please set Enabled to either `true` or `false` in your `.rubocop.yml` file.
 
-        Please also note that you can opt-in to new cops by default by adding this to your config:
+        To opt-in to new cops by default, add this to your config:
           AllCops:
             NewCops: enable
       BANNER
@@ -35,16 +35,11 @@ module RuboCop
       def warn_on_pending_cops(pending_cops)
         warn Rainbow(PENDING_BANNER).yellow
 
-        pending_cops.each { |cop| warn_pending_cop cop }
+        summary = "#{pending_cops.size} pending cop#{'s' if pending_cops.size > 1}: " \
+                  "#{pending_cops.map(&:name).join(', ')}"
+        warn Rainbow(summary).yellow
 
         warn Rainbow('For more information: https://docs.rubocop.org/rubocop/versioning.html').yellow
-      end
-
-      def warn_pending_cop(cop)
-        version = cop.metadata['VersionAdded'] || 'N/A'
-
-        warn Rainbow("#{cop.name}: # new in #{version}").yellow
-        warn Rainbow('  Enabled: true').yellow
       end
     end
   end

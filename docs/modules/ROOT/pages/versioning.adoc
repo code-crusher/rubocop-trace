@@ -182,11 +182,12 @@ are not explicitly enabled or disabled in the user configuration. Here's
 one such message:
 
 ----
-The following cops were added to RuboCop, but are not configured. Please
-set Enabled to either `true` or `false` in your `.rubocop.yml` file:
- - Style/HashEachMethods (0.80)
- - Style/HashTransformKeys (0.80)
- - Style/HashTransformValues (0.80)
+The following cops were added to RuboCop, but are not configured. Please set Enabled to either `true` or `false` in your `.rubocop.yml` file.
+
+To opt-in to new cops by default, add this to your config:
+  AllCops:
+    NewCops: enable
+3 pending cops: Style/HashEachMethods, Style/HashTransformKeys, Style/HashTransformValues
 For more information: https://docs.rubocop.org/rubocop/versioning.html
 ----
 

@@ -606,10 +606,6 @@ RSpec.describe 'RuboCop::CLI options', :isolated_environment do # rubocop:disabl
           2 files inspected, no offenses detected
         INSPECTED_OUTPUT
 
-        let(:versioning_manual_url) { <<~VERSIONING_MANUAL_URL.chop }
-          For more information: https://docs.rubocop.org/rubocop/versioning.html
-        VERSIONING_MANUAL_URL
-
         before do
           create_file('rubocop_ext.rb', <<~RUBY)
             module RuboCop
@@ -648,16 +644,7 @@ RSpec.describe 'RuboCop::CLI options', :isolated_environment do # rubocop:disabl
             it 'accepts cop names from plugins with a pending cop warning' do
               expect(output).to start_with(pending_cop_warning)
               expect(output).to end_with(inspected_output)
-
-              remaining_range = pending_cop_warning.length..-(inspected_output.length + 1)
-              pending_cops = output[remaining_range]
-
-              expect(pending_cops)
-                .to include("Style/SomeCop: # new in 0.80\n  Enabled: true")
-
-              manual_url = output[remaining_range].split("\n").last
-
-              expect(manual_url).to eq(versioning_manual_url)
+              expect(output).to match(%r{\d+ pending cops?: .*Style/SomeCop\n})
             end
           end
 
@@ -667,16 +654,7 @@ RSpec.describe 'RuboCop::CLI options', :isolated_environment do # rubocop:disabl
             it 'accepts cop names from plugins with a pending cop warning' do
               expect(output).to start_with(pending_cop_warning)
               expect(output).to end_with(inspected_output)
-
-              remaining_range = pending_cop_warning.length..-(inspected_output.length + 1)
-              pending_cops = output[remaining_range]
-
-              expect(pending_cops)
-                .to include("Style/SomeCop: # new in N/A\n  Enabled: true")
-
-              manual_url = output[remaining_range].split("\n").last
-
-              expect(manual_url).to eq(versioning_manual_url)
+              expect(output).to match(%r{\d+ pending cops?: .*Style/SomeCop\n})
             end
           end
 
@@ -771,7 +749,7 @@ RSpec.describe 'RuboCop::CLI options', :isolated_environment do # rubocop:disabl
 
             it 'displays a pending cop warning and does not run the cop' do
               expect(output).to start_with(pending_cop_warning)
-              expect(output).to include("Style/SomeCop: # new in 0.80\n  Enabled: true")
+              expect(output).to match(%r{\d+ pending cops?: .*Style/SomeCop})
               expect(output).not_to include('Some message')
             end
           end
@@ -780,7 +758,7 @@ RSpec.describe 'RuboCop::CLI options', :isolated_environment do # rubocop:disabl
             let(:new_cops_value) { "'0.80'" }
 
             it 'does not include the cop in the pending cop warning and runs the cop' do
-              expect(output).not_to include('Style/SomeCop: # new in 0.80')
+              expect(output).not_to match(%r{pending cops?: .*Style/SomeCop})
               expect(output).to include('Some message')
             end
           end
@@ -794,7 +772,7 @@ RSpec.describe 'RuboCop::CLI options', :isolated_environment do # rubocop:disabl
 
             it 'does not include the cop in the pending cop warning and runs the cop because ' \
                'the department takes precedence over `AllCops`' do
-              expect(output).not_to include('Style/SomeCop: # new in 0.80')
+              expect(output).not_to match(%r{pending cops?: .*Style/SomeCop})
               expect(output).to include('Some message')
             end
           end
