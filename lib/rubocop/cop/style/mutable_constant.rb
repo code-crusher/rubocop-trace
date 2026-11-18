@@ -14,6 +14,15 @@ module RuboCop
       # option is disabled by default to preserve existing behavior; opt in to
       # get strict nested freezing.
       #
+      # The `unfrozen_literals` style inverts the check for codebases that treat
+      # the constant name itself as the immutability contract. It registers an
+      # offense for `.freeze` called on a mutable literal assigned to a constant
+      # and removes it. Freezing a non-literal value, such as
+      # `Something.new.freeze`, is still allowed. With `Recursive` enabled,
+      # frozen literals nested inside arrays and hashes are reported as well.
+      # This style does not overlap with `Style/RedundantFreeze`, which handles
+      # `.freeze` on immutable objects.
+      #
       # Strict mode can be used to freeze all constants, rather than
       # just literals.
       # Strict mode is considered an experimental feature. It has not been
@@ -37,9 +46,12 @@ module RuboCop
       # the `shareable_constant_value` directive is used.
       #
       # @safety
-      #   This cop's autocorrection is unsafe since any mutations on objects that
-      #   are made frozen will change from being accepted to raising `FrozenError`,
-      #   and will need to be manually refactored.
+      #   This cop's autocorrection is unsafe. With the `literals` and `strict`
+      #   styles, any mutations on objects that are made frozen will change from
+      #   being accepted to raising `FrozenError`, and will need to be manually
+      #   refactored. With the `unfrozen_literals` style, objects that were frozen
+      #   become mutable, so they can be mutated where a `FrozenError` was
+      #   previously raised.
       #
       # @example EnforcedStyle: literals (default)
       #   # bad
@@ -91,6 +103,19 @@ module RuboCop
       #
       #   # good - `Data.define` declares an immutable value type
       #   CONST = Data.define(:foo, :bar)
+      #
+      # @example EnforcedStyle: unfrozen_literals
+      #   # bad
+      #   CONST = [1, 2, 3].freeze
+      #
+      #   # bad
+      #   CONST = 'str'.freeze
+      #
+      #   # good
+      #   CONST = [1, 2, 3]
+      #
+      #   # good - freezing a non-literal value is still allowed
+      #   CONST = Something.new.freeze
       #
       # @example
       #   # Magic comment - shareable_constant_value: literal
@@ -145,6 +170,7 @@ module RuboCop
         extend AutoCorrector
 
         MSG = 'Freeze mutable objects assigned to constants.'
+        MSG_UNFROZEN_LITERALS = 'Do not freeze literals assigned to constants.'
 
         # With `Recursive: true`, `.freeze` is appended to a nested literal. When the literal
         # is the last element and spans multiple lines, the trailing comma lands between the literal
@@ -167,6 +193,8 @@ module RuboCop
         private
 
         def on_assignment(value)
+          return unfrozen_literals_check(value) if style == :unfrozen_literals
+
           nodes = mutable_nodes(value) do |node|
             if style == :strict
               strict_check(node)
@@ -178,6 +206,30 @@ module RuboCop
           nodes.each do |node|
             add_offense(node) { |corrector| autocorrect(corrector, node) }
           end
+        end
+
+        def unfrozen_literals_check(value)
+          frozen_literals(value).each do |node|
+            add_offense(node, message: MSG_UNFROZEN_LITERALS) do |corrector|
+              corrector.remove(unfreeze_range(node))
+            end
+          end
+        end
+
+        # Returns the `.freeze` calls on mutable literals in the assigned value.
+        # Without `Recursive`, only the assigned value itself is inspected.
+        def frozen_literals(value)
+          nodes = explicitly_frozen_literal?(value) ? [value] : []
+          return nodes unless recursive?
+
+          literal = nodes.empty? ? value : value.receiver
+          nodes + literal_children(literal).flat_map { |child| frozen_literals(child) }
+        end
+
+        # The `freeze` call may be written with parentheses (`[1].freeze()`),
+        # so the whole call from the dot onwards is removed.
+        def unfreeze_range(node)
+          node.loc.dot.begin.join(node.source_range.end)
         end
 
         def mutable_nodes(value, &block)

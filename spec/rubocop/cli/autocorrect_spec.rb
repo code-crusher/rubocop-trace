@@ -6103,6 +6103,35 @@ RSpec.describe 'RuboCop::CLI --autocorrect', :isolated_environment do # rubocop:
     RUBY
   end
 
+  it 'corrects `EnforcedStyle: unfrozen_literals` of `Style/MutableConstant` with `Style/RedundantFreeze`' do
+    create_file('.rubocop.yml', <<~YAML)
+      Style/MutableConstant:
+        EnforcedStyle: unfrozen_literals
+    YAML
+    source_file = Pathname('example.rb')
+    create_file(source_file, <<~RUBY)
+      # frozen_string_literal: true
+
+      LIST = [1, 2, 3].freeze
+      NAME = 'str'.freeze
+      LIMIT = 1.freeze
+      PATTERN = /foo/.freeze
+      OBJECT = Something.new.freeze
+    RUBY
+
+    expect(cli.run(['-A', '--only', 'Style/MutableConstant,Style/RedundantFreeze'])).to eq(0)
+
+    expect(source_file.read).to eq(<<~RUBY)
+      # frozen_string_literal: true
+
+      LIST = [1, 2, 3]
+      NAME = 'str'
+      LIMIT = 1
+      PATTERN = /foo/
+      OBJECT = Something.new.freeze
+    RUBY
+  end
+
   it 'corrects `Recursive: true` of `Style/MutableConstant` with TrailingCommaIn(Array|Hash)Literal' do
     create_file('.rubocop.yml', <<~YAML)
       Style/MutableConstant:
