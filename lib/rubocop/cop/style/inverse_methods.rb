@@ -35,6 +35,7 @@ module RuboCop
       #   foo == bar
       #   !!('foo' =~ /^\w+$/)
       #   !(foo.class < Numeric) # Checking class hierarchy is allowed
+      #   !(model.superclass <= included_module) # Checking class hierarchy is allowed
       #   # Blocks with guard clauses are ignored:
       #   foo.select do |f|
       #     next if f.zero?
@@ -46,6 +47,7 @@ module RuboCop
 
         MSG = 'Use `%<inverse>s` instead of inverting `%<method>s`.'
         CLASS_COMPARISON_METHODS = %i[<= >= < >].freeze
+        METHODS_RETURNING_MODULE = %i[class superclass singleton_class].freeze
         SAFE_NAVIGATION_INCOMPATIBLE_METHODS = (CLASS_COMPARISON_METHODS + %i[any? none?]).freeze
         EQUALITY_METHODS = %i[== != =~ !~ <= >= < >].freeze
         NEGATED_EQUALITY_METHODS = %i[!= !~].freeze
@@ -195,13 +197,21 @@ module RuboCop
         # When comparing classes, `!(Integer < Numeric)` is not the same as
         # `Integer > Numeric`.
         def possible_class_hierarchy_check?(lhs, rhs, method)
-          CLASS_COMPARISON_METHODS.include?(method) &&
-            (camel_case_constant?(lhs) || (rhs.size == 1 && camel_case_constant?(rhs.first)))
+          return false unless CLASS_COMPARISON_METHODS.include?(method)
+
+          return true if camel_case_constant?(lhs) || module_returning_call?(lhs)
+
+          rhs.size == 1 && (camel_case_constant?(rhs.first) || module_returning_call?(rhs.first))
         end
 
         def camel_case_constant?(node)
           node.const_type? && CAMEL_CASE.match?(node.source)
         end
+
+        # @!method module_returning_call?(node)
+        def_node_matcher :module_returning_call?, <<~PATTERN
+          (call _ {:class :superclass :singleton_class})
+        PATTERN
 
         def dot_range(loc)
           range_between(loc.dot.begin_pos, loc.expression.end_pos)

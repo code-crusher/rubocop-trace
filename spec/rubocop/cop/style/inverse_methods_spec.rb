@@ -312,6 +312,47 @@ RSpec.describe RuboCop::Cop::Style::InverseMethods, :config do
     RUBY
   end
 
+  it 'allows comparing method calls that return a module on the right' do
+    expect_no_offenses(<<~RUBY)
+      !(model <= module_variable.superclass)
+    RUBY
+  end
+
+  it 'allows comparing method calls that return a module on the left' do
+    expect_no_offenses(<<~RUBY)
+      !(model.class <= included_module)
+    RUBY
+  end
+
+  it 'allows comparing `superclass` calls on the left' do
+    expect_no_offenses(<<~RUBY)
+      model <= included_module && !(model.superclass <= included_module)
+    RUBY
+  end
+
+  it 'allows comparing `singleton_class` calls on the left' do
+    expect_no_offenses(<<~RUBY)
+      !(model.singleton_class <= included_module)
+    RUBY
+  end
+
+  it 'allows comparing module-returning calls with `<` on the left' do
+    expect_no_offenses(<<~RUBY)
+      !(model.class < included_module)
+    RUBY
+  end
+
+  it 'registers an offense for comparing method calls that do not return a module' do
+    expect_offense(<<~RUBY)
+      !(model.size <= limit)
+      ^^^^^^^^^^^^^^^^^^^^^^ Use `>` instead of inverting `<=`.
+    RUBY
+
+    expect_correction(<<~RUBY)
+      model.size > limit
+    RUBY
+  end
+
   it 'registers an offense for comparing snake case constants on the right' do
     expect_offense(<<~RUBY)
       klass = self.class
