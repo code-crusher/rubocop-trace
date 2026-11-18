@@ -355,6 +355,7 @@ module RuboCop
 
           add_offense(location, message: message) do |corrector|
             remove_entire_comment(corrector, comment)
+            remove_paired_enables(corrector, comment, cops)
           end
         end
 
@@ -368,6 +369,68 @@ module RuboCop
           else
             corrector.remove(range)
           end
+        end
+
+        # An `enable` that closes a redundant `disable` restores nothing once the
+        # `disable` is gone, but `Lint/RedundantCopEnableDirective` cannot report
+        # it: for a cop disabled in the config, an `enable` is also the opt-in
+        # form it has to leave alone (#10987). So the pair goes together here.
+        def remove_paired_enables(corrector, comment, cops)
+          return if all_disabled?(comment)
+
+          cops.each do |cop|
+            next if cop == 'all' || department_marker?(cop)
+
+            enable = paired_enable(cop, comment)
+            remove_entire_comment(corrector, enable) if enable
+          end
+        end
+
+        def paired_enable(cop, comment)
+          range = config_disabled_range(cop, comment)
+          return unless range&.end&.finite?
+
+          enable = processed_source.comment_at_line(range.end)
+          return unless enable && solely_enables?(enable, cop)
+          return if anything_follows_line?(range.end)
+
+          enable
+        end
+
+        # Only the `disable` that closes the config-injected range is matched.
+        # One nested inside an earlier directive's range cannot go: the
+        # `enable` that closes it closes that earlier directive as well, and
+        # the earlier directive is not being removed.
+        def config_disabled_range(cop, comment)
+          line_ranges = cop_disabled_line_ranges[cop]
+          return unless line_ranges
+
+          line_ranges.each_cons(2) do |previous_range, range|
+            next unless range.begin == comment.source_range.line
+            next unless followed_ranges?(previous_range, range)
+
+            return range if previous_range.min == CommentConfig::CONFIG_DISABLED_LINE_RANGE_MIN
+          end
+
+          nil
+        end
+
+        # An `enable` shared with another cop cannot be removed, since that
+        # would take the other cop's opt-in with it. A malformed one keeps free
+        # text that `remove_entire_comment` would leave on the line above, and
+        # `Lint/CopDirectiveSyntax` reports it anyway. An `enable-next` scopes
+        # only the statement below it, so it is not a pair to this `disable`.
+        def solely_enables?(comment, cop)
+          directive = DirectiveComment.new(comment)
+          directive.enabled? && !directive.enable_next? &&
+            !directive.malformed? && directive.raw_cop_names == [cop]
+        end
+
+        # Anything after the `enable` may still be inspected because of it: a cop
+        # disabled in the config only runs on the lines a directive opts it in
+        # for, and comment-oriented cops read the comments too.
+        def anything_follows_line?(line)
+          processed_source.tokens.any? { |token| token.line > line }
         end
 
         def add_offense_for_some_cops(comment, cops)

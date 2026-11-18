@@ -3769,6 +3769,28 @@ RSpec.describe 'RuboCop::CLI --autocorrect', :isolated_environment do # rubocop:
     expect(File.read('example.rb')).to eq("# frozen_string_literal: true\n\n$g = 'a'\n")
   end
 
+  it 'removes the paired `enable` along with a redundant `disable` of a config-disabled cop' do
+    create_file('.rubocop.yml', <<~YAML)
+      Style/StringLiterals:
+        Enabled: false
+    YAML
+    create_file('example.rb', <<~RUBY)
+      # frozen_string_literal: true
+
+      # rubocop:disable Style/StringLiterals
+      FOO = "double quoted"
+      # rubocop:enable Style/StringLiterals
+    RUBY
+
+    expect(cli.run(%w[--autocorrect])).to eq(0)
+    expect($stderr.string).to eq('')
+    expect(File.read('example.rb')).to eq(<<~RUBY)
+      # frozen_string_literal: true
+
+      FOO = "double quoted"
+    RUBY
+  end
+
   it 'removes a redundant directive that autocorrection moves onto the line of an offense corrected earlier' do
     create_file('.rubocop.yml', <<~YAML)
       AllCops:

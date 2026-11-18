@@ -58,6 +58,110 @@ RSpec.describe RuboCop::Cop::Lint::RedundantCopDisableDirective, :config do
               end
             end
 
+            describe 'when a matching `enable` closes the directive' do
+              it 'removes the `enable` too, since it restores nothing' do
+                expect_offense(<<~RUBY)
+                  # rubocop:disable Metrics/MethodLength
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unnecessary disabling of `Metrics/MethodLength`.
+                  foo
+                  # rubocop:enable Metrics/MethodLength
+                RUBY
+
+                expect_correction(<<~RUBY)
+                  foo
+                RUBY
+              end
+
+              it 'removes the `--` reason along with the `enable`' do
+                expect_offense(<<~RUBY)
+                  # rubocop:disable Metrics/MethodLength
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unnecessary disabling of `Metrics/MethodLength`.
+                  foo
+                  # rubocop:enable Metrics/MethodLength -- no longer needed
+                RUBY
+
+                expect_correction(<<~RUBY)
+                  foo
+                RUBY
+              end
+
+              it 'keeps the `enable` when code follows it, since it still opts the cop in' do
+                expect_offense(<<~RUBY)
+                  # rubocop:disable Metrics/MethodLength
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unnecessary disabling of `Metrics/MethodLength`.
+                  foo
+                  # rubocop:enable Metrics/MethodLength
+                  bar
+                RUBY
+
+                expect_correction(<<~RUBY)
+                  foo
+                  # rubocop:enable Metrics/MethodLength
+                  bar
+                RUBY
+              end
+
+              it 'keeps the `enable` when a comment follows it' do
+                expect_offense(<<~RUBY)
+                  # rubocop:disable Metrics/MethodLength
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unnecessary disabling of `Metrics/MethodLength`.
+                  foo
+                  # rubocop:enable Metrics/MethodLength
+                  # trailing note
+                RUBY
+
+                expect_correction(<<~RUBY)
+                  foo
+                  # rubocop:enable Metrics/MethodLength
+                  # trailing note
+                RUBY
+              end
+
+              it 'keeps the `enable` when it names another cop as well' do
+                expect_offense(<<~RUBY)
+                  # rubocop:disable Metrics/MethodLength
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unnecessary disabling of `Metrics/MethodLength`.
+                  foo
+                  # rubocop:enable Metrics/MethodLength, Metrics/ClassLength
+                RUBY
+
+                expect_correction(<<~RUBY)
+                  foo
+                  # rubocop:enable Metrics/MethodLength, Metrics/ClassLength
+                RUBY
+              end
+
+              it 'keeps the `enable` when it is malformed, since `Lint/CopDirectiveSyntax` reports it' do
+                expect_offense(<<~RUBY)
+                  # rubocop:disable Metrics/MethodLength
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unnecessary disabling of `Metrics/MethodLength`.
+                  foo
+                  # rubocop:enable Metrics/MethodLength keep this note
+                RUBY
+
+                expect_correction(<<~RUBY)
+                  foo
+                  # rubocop:enable Metrics/MethodLength keep this note
+                RUBY
+              end
+
+              it 'keeps the `enable` when it is an `enable-next` directive' do
+                expect_offense(<<~RUBY)
+                  # rubocop:disable Metrics/MethodLength
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unnecessary disabling of `Metrics/MethodLength`.
+                  foo
+                  # rubocop:enable-next Metrics/MethodLength
+                  bar
+                RUBY
+
+                expect_correction(<<~RUBY)
+                  foo
+                  # rubocop:enable-next Metrics/MethodLength
+                  bar
+                RUBY
+              end
+            end
+
             describe 'if that cop has offenses' do
               it 'returns an offense' do
                 expect_offense(<<~RUBY)
