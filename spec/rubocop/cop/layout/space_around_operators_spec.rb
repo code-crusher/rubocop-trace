@@ -1022,6 +1022,73 @@ RSpec.describe RuboCop::Cop::Layout::SpaceAroundOperators, :config do
       RUBY
     end
 
+    it 'accepts right-aligned numeric operands' do
+      expect_no_offenses(<<~RUBY)
+        if    a <  1 then 2
+        elsif a <  3 then a <  4 + 20
+        elsif a < 10 then a < 10 +  5
+        end
+      RUBY
+    end
+
+    it 'accepts right-aligned float operands' do
+      expect_no_offenses(<<~RUBY)
+        x = a +  1.5
+        y = b + 12.5
+      RUBY
+    end
+
+    it 'accepts right-aligned rational operands' do
+      expect_no_offenses(<<~RUBY)
+        x = a +  1r
+        y = b + 12r
+      RUBY
+    end
+
+    it 'accepts right-aligned imaginary operands' do
+      expect_no_offenses(<<~RUBY)
+        x = a +  1i
+        y = b + 12i
+      RUBY
+    end
+
+    it 'registers an offense and corrects a numeric operand not right-aligned with another one' do
+      expect_offense(<<~RUBY)
+        x = a +  1
+              ^ Operator `+` should be surrounded by a single space.
+        y = b + 123
+      RUBY
+
+      expect_correction(<<~RUBY)
+        x = a + 1
+        y = b + 123
+      RUBY
+    end
+
+    context 'with AllowForAlignment disabled' do
+      let(:allow_for_alignment) { false }
+
+      it 'registers an offense and corrects right-aligned numeric operands' do
+        expect_offense(<<~RUBY)
+          if    a <  1 then 2
+                  ^ Operator `<` should be surrounded by a single space.
+          elsif a <  3 then a <  4 + 20
+                  ^ Operator `<` should be surrounded by a single space.
+                              ^ Operator `<` should be surrounded by a single space.
+          elsif a < 10 then a < 10 +  5
+                                   ^ Operator `+` should be surrounded by a single space.
+          end
+        RUBY
+
+        expect_correction(<<~RUBY)
+          if    a < 1 then 2
+          elsif a < 3 then a < 4 + 20
+          elsif a < 10 then a < 10 + 5
+          end
+        RUBY
+      end
+    end
+
     it 'registers an offense and corrects arguments to a method' do
       expect_offense(<<~RUBY)
         puts 1 +  2

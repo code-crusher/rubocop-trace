@@ -248,7 +248,7 @@ module RuboCop
           elsif missing_surrounding_space?(with_space)
             "Surrounding space missing for operator `#{operator.source}`."
           elsif excess_leading_space?(type, operator, with_space, right_operand) ||
-                excess_trailing_space?(right_operand.source_range, with_space)
+                excess_trailing_space?(right_operand, with_space)
             "Operator `#{operator.source}` should be surrounded " \
               'by a single space.'
           end
@@ -301,8 +301,11 @@ module RuboCop
         end
 
         def excess_trailing_space?(right_operand, with_space)
+          range = right_operand.source_range
+
           with_space.source.end_with?(EXCESSIVE_SPACE) &&
-            (!allow_for_alignment? || !aligned_with_something?(right_operand))
+            (!allow_for_alignment? ||
+              !(aligned_with_something?(range) || right_aligned_numeric_literal?(range)))
         end
 
         def align_hash_cop_config

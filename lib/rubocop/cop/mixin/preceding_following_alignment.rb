@@ -9,6 +9,10 @@ module RuboCop
       # Tokens that end with an `=`, as well as `<<`, that can be aligned together:
       # `=`, `==`, `===`, `!=`, `<=`, `>=`, `<<` and operator assignment (`+=`, etc).
       ASSIGNMENT_OR_COMPARISON_TOKENS = %i[tEQL tEQ tEQQ tNEQ tLEQ tGEQ tOP_ASGN tLSHFT].freeze
+      # Numeric literal tokens, which can be right-aligned with each other:
+      #   if    a <  1 then 2
+      #   elsif a < 10 then a < 10 +  5
+      NUMERIC_TOKEN_TYPES = %i[tINTEGER tFLOAT tRATIONAL tIMAGINARY].freeze
 
       private
 
@@ -22,6 +26,30 @@ module RuboCop
 
       def aligned_with_operator?(range)
         aligned_with_adjacent_line?(range, method(:aligned_operator?))
+      end
+
+      # Whether the range starts with a numeric literal that is right-aligned
+      # with a numeric literal on an adjacent line.
+      def right_aligned_numeric_literal?(range)
+        numeric_token = leading_numeric_token(range)
+        return false unless numeric_token
+
+        aligned_with_adjacent_line?(numeric_token.pos, method(:right_aligned_numeric_token?))
+      end
+
+      def leading_numeric_token(range)
+        processed_source.tokens_within(range).find do |token|
+          token.pos.begin_pos == range.begin_pos && NUMERIC_TOKEN_TYPES.include?(token.type)
+        end
+      end
+
+      def right_aligned_numeric_token?(range, _line, lineno)
+        line_range = processed_source.buffer.line_range(lineno)
+        return false unless line_range
+
+        processed_source.tokens_within(line_range).any? do |token|
+          NUMERIC_TOKEN_TYPES.include?(token.type) && token.pos.last_column == range.last_column
+        end
       end
 
       # Allows alignment with a preceding operator that ends with an `=`,
