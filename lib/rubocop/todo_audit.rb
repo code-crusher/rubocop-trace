@@ -22,7 +22,9 @@ module RuboCop
       return [] if entries.empty?
 
       offending_cops = offending_cops_without_todo(entries)
-      entries.reject { |entry| offending_cops[absolute(entry.path)]&.include?(entry.cop_name) }
+      entries.reject do |entry|
+        files(entry).any? { |file| offending_cops[file]&.include?(entry.cop_name) }
+      end
     end
 
     def todo_file
@@ -59,11 +61,12 @@ module RuboCop
         Cop::Registry.global.contains_cop_matching?([cop_name])
     end
 
-    # Inspects every file the todo entries mention, with the todo exclusions
+    # Inspects every file the todo entries cover - a literal entry names one
+    # file, a glob entry every file it matches - with the todo exclusions
     # subtracted from the configuration, and returns the names of the cops
     # that still report offenses, keyed by absolute file path.
     def offending_cops_without_todo(entries)
-      files = entries.map { |entry| absolute(entry.path) }.uniq.select { |file| File.file?(file) }
+      files = entries.flat_map { |entry| files(entry) }.uniq
 
       files.to_h do |file|
         offenses = inspect_file(file, entries)
@@ -102,6 +105,17 @@ module RuboCop
     def subtract_excludes(cop_config, cop_entries)
       removals = cop_entries.map { |entry| absolute(entry.path) }
       cop_config.merge('Exclude' => cop_config['Exclude'] - removals)
+    end
+
+    # The existing files an entry covers: the file a literal entry names, or
+    # every file a glob entry matches. An entry that covers nothing has none.
+    # The literal check comes first because `Dir.glob` would read glob
+    # metacharacters in a file's name as operators.
+    def files(entry)
+      path = absolute(entry.path)
+      return [path] if File.file?(path)
+
+      Dir.glob(path).select { |file| File.file?(file) }
     end
 
     def absolute(path)

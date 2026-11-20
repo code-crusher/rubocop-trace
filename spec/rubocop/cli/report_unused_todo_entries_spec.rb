@@ -62,6 +62,69 @@ RSpec.describe 'RuboCop::CLI --report-unused-todo-entries', :isolated_environmen
     end
   end
 
+  context 'when a todo entry is a glob that no longer covers an offense' do
+    before do
+      create_file('spec/nested/deep_spec.rb', <<~RUBY)
+        # frozen_string_literal: true
+
+        x = 1
+        puts x
+      RUBY
+      create_file('.rubocop_todo.yml', <<~YAML)
+        Style/ClassVars:
+          Exclude:
+            - 'offending.rb'
+            - 'spec/**/*_spec.rb'
+      YAML
+    end
+
+    it 'reports the stale glob entry' do
+      expect(cli.run(['--report-unused-todo-entries', '.'])).to eq(1)
+      expect($stderr.string).to include('1 unused todo entry found in `.rubocop_todo.yml`:')
+      expect($stderr.string).to include('Style/ClassVars: spec/**/*_spec.rb')
+      expect($stderr.string).not_to include('Style/ClassVars: offending.rb')
+    end
+  end
+
+  context 'when a todo entry is a glob that still covers an offense' do
+    before do
+      create_file('spec/nested/deep_spec.rb', <<~RUBY)
+        # frozen_string_literal: true
+
+        @@bad = 1
+        puts @@bad
+      RUBY
+      create_file('.rubocop_todo.yml', <<~YAML)
+        Style/ClassVars:
+          Exclude:
+            - 'offending.rb'
+            - 'spec/**/*_spec.rb'
+      YAML
+    end
+
+    it 'reports nothing and passes' do
+      expect(cli.run(['--report-unused-todo-entries', '.'])).to eq(0)
+      expect($stderr.string).not_to include('unused todo')
+    end
+  end
+
+  context 'when a todo entry is a glob that matches no file' do
+    before do
+      create_file('.rubocop_todo.yml', <<~YAML)
+        Style/ClassVars:
+          Exclude:
+            - 'offending.rb'
+            - 'vanished/**/*_spec.rb'
+      YAML
+    end
+
+    it 'reports the entry' do
+      expect(cli.run(['--report-unused-todo-entries', '.'])).to eq(1)
+      expect($stderr.string).to include('Style/ClassVars: vanished/**/*_spec.rb')
+      expect($stderr.string).not_to include('Style/ClassVars: offending.rb')
+    end
+  end
+
   context 'when the todo file lists a cop that is not loaded' do
     before do
       create_file('.rubocop_todo.yml', <<~YAML)

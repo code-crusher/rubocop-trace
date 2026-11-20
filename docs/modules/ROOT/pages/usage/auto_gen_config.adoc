@@ -62,6 +62,13 @@ Entries for cops that are not loaded in the current run (for example,
 extension cops when running plain `rubocop`) are not judged, since the
 absence of their offenses proves nothing.
 
+A glob entry is judged by the files it matches, in the same way as an
+entry naming one file: it is unused when no cop flags any matching file
+anymore, and still needed while any matching file has an offense. Note
+that regenerating the todo file can turn a glob entry into one file per
+offense, which is not the same judgment: after fixing the last offense
+covered by a glob entry, remove the entry itself.
+
 Another way of silencing offense reports, aside from configuration, is
 through xref:usage/source_code_directives.adoc[source code directives]. These can be added manually or
 automatically.
